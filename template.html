@@ -194,6 +194,7 @@ function getActiveTrains(line,dtime){
   const dg=getDateGroup(dtime);
   const tm=dtime.getHours()*60+dtime.getMinutes();
   const ts=dtime.getSeconds(); // seconds for sub-minute smooth interpolation
+  const tmNext=tm+1440; // next-day equivalent for late-night comparison
   const out=[];
 
   function fmtM(m){return String(m/60|0).padStart(2,'0')+':'+String(m%60).padStart(2,'0');}
@@ -214,7 +215,20 @@ function getActiveTrains(line,dtime){
     let trainIdx=0;
     for(let di=0;di<depTimes.length;di++){
       const depM=depTimes[di];
-      if(depM>tm+1)break; // times are sorted, no need to check further
+      // Optimization: in normal hours, skip early trains
+      if(tm>=360){
+        if(depM>tm+1)break; // times are sorted, no need to check further
+        if(depM>tm)continue; // not departed yet
+      }else{
+        // Late-night (before 06:00): only check last few trains (likely still running)
+        // Skip first N-6 departures; check last 6 to find late-night runners
+        if(di<depTimes.length-6)continue;
+        // In late-night mode, these last trains are assumed departed from yesterday
+        // Don't check depM > tm because depM is yesterday's time (e.g. 1413 for 23:33)
+      }
+
+      // Use tmNext for late-night comparison so station times > 1440 match correctly
+      const effectiveTm=tm<360?tmNext:tm;
 
       let prevSt=firstSt,prevMin=depM,found=false;
       for(let si=1;si<orderedNames.length;si++){
@@ -231,10 +245,10 @@ function getActiveTrains(line,dtime){
         }
         if(arrMin<0)break;
 
-        if(tm>=prevMin&&tm<arrMin){
+        if(effectiveTm>=prevMin&&effectiveTm<arrMin){
           // Sub-minute smooth interpolation using seconds
           const durSec=(arrMin-prevMin)*60;
-          const elapsedSec=(tm-prevMin)*60+ts;
+          const elapsedSec=(effectiveTm-prevMin)*60+ts;
           const pr=durSec>0?elapsedSec/durSec:0;
           const fi=line.stIdx[prevSt],ti2=line.stIdx[curSt];
           if(fi!==undefined&&ti2!==undefined){
@@ -253,6 +267,7 @@ function getActiveTrains(line,dtime){
         prevSt=curSt;prevMin=arrMin;
       }
 
+      // Loop line: check if train is on the last segment (returning to first station)
       if(!found&&line.loop&&orderedNames.length>1){
         const loopTimes=schDir[dg][orderedNames[0]];
         if(loopTimes){
@@ -262,9 +277,9 @@ function getActiveTrains(line,dtime){
             if(loopTimes[mid]>prevMin){nextLoop=loopTimes[mid];hi=mid-1;}
             else{lo=mid+1;}
           }
-          if(nextLoop>0&&tm>=prevMin&&tm<nextLoop){
+          if(nextLoop>0&&effectiveTm>=prevMin&&effectiveTm<nextLoop){
             const durSec=(nextLoop-prevMin)*60;
-            const elapsedSec=(tm-prevMin)*60+ts;
+            const elapsedSec=(effectiveTm-prevMin)*60+ts;
             const pr=durSec>0?elapsedSec/durSec:0;
             const fi=line.stIdx[prevSt],ti2=line.stIdx[orderedNames[0]];
             if(fi!==undefined&&ti2!==undefined){
@@ -276,10 +291,13 @@ function getActiveTrains(line,dtime){
                 dep:fmtM(prevMin),arr:fmtM(nextLoop),
                 lineName:line.name,lineColor:line.color
               });
+              found=true;
             }
           }
         }
       }
+
+      // Train has arrived at terminal — don't display (it's off the line)
       trainIdx++;
     }
   }
