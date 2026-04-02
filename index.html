@@ -11,7 +11,7 @@
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans SC",sans-serif;background:#080c14;color:#e0e0e0;overflow:hidden}
 #map{position:absolute;top:0;bottom:0;left:0;right:0;z-index:1}
 .leaflet-container{background:#080c14!important}
-/* Dim the basemap so subway lines stand out */
+/* Dim the basemap so subway lines stand out (default: night mode; overridden by JS for day mode) */
 .leaflet-tile-pane{filter:brightness(0.55) saturate(0.6)}
 
 /* Panel */
@@ -339,10 +339,30 @@ function makeTrainIcon(color,bearing){
 // MAP
 // ═══════════════════════════════════════════════════════════
 const map=L.map('map',{center:[39.92,116.40],zoom:11,zoomControl:false,attributionControl:false});
-// Gaode (Amap) dark tile - GCJ-02 coordinate system, fast in China
-L.tileLayer('https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=7',{
+// Gaode (Amap) tiles - GCJ-02 coordinate system, fast in China
+const tileDay=L.tileLayer('https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=6',{
   subdomains:'1234',maxZoom:18
-}).addTo(map);
+});
+const tileNight=L.tileLayer('https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=7',{
+  subdomains:'1234',maxZoom:18
+});
+let isNightMode=null;
+function updateMapTheme(dtime){
+  const h=dtime.getHours();
+  const night=h>=22||h<7;
+  if(night===isNightMode)return;
+  isNightMode=night;
+  const tp=document.querySelector('.leaflet-tile-pane');
+  if(night){
+    if(map.hasLayer(tileDay)){map.removeLayer(tileDay);tileNight.addTo(map);}
+    tp.style.filter='brightness(0.55) saturate(0.6)';
+  }else{
+    if(map.hasLayer(tileNight)){map.removeLayer(tileNight);tileDay.addTo(map);}
+    tp.style.filter='brightness(0.75) saturate(0.8)';
+  }
+}
+// Initialize: will be called on first render via tick()
+tileNight.addTo(map);
 L.control.zoom({position:'bottomright'}).addTo(map);
 
 // Count station appearances for transfer detection
@@ -522,6 +542,7 @@ function tick(){
   if(simTime&&speed>1)simTime=new Date(simTime.getTime()+dt*speed);
   updateClock();
   const dtime=simTime||new Date();
+  updateMapTheme(dtime);
   const curMin=dtime.getHours()*60+dtime.getMinutes();
   // Update trains every frame for smooth animation
   if(curMin!==lastTrainMinute){
