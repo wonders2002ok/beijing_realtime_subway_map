@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>北京地铁 · 全网实时模拟</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans SC",sans-serif;background:#080c14;color:#e0e0e0;overflow:hidden}
+#map{position:absolute;top:0;bottom:0;left:0;right:0;z-index:1}
+.leaflet-container{background:#080c14!important}
+
+/* Panel */
+#panel{
+  position:absolute;top:10px;left:10px;z-index:1000;
+  background:rgba(8,12,20,0.95);backdrop-filter:blur(24px);
+  border:1px solid rgba(255,255,255,0.06);border-radius:16px;
+  padding:16px 18px;width:280px;max-height:calc(100vh - 20px);overflow-y:auto;
+  box-shadow:0 8px 40px rgba(0,0,0,0.6);
+  scrollbar-width:thin;scrollbar-color:#333 transparent;
+}
+#panel::-webkit-scrollbar{width:4px}
+#panel::-webkit-scrollbar-thumb{background:#444;border-radius:2px}
+#panel h1{
+  font-size:17px;font-weight:700;margin-bottom:1px;
+  background:linear-gradient(135deg,#e74c3c,#f39c12,#2ecc71,#3498db,#9b59b6);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+#panel .subtitle{font-size:10px;color:#555;margin-bottom:10px}
+#panel .time-display{
+  font-size:32px;font-weight:200;letter-spacing:2px;
+  font-variant-numeric:tabular-nums;color:#fff;
+}
+#panel .time-display .sec{font-size:14px;color:#555}
+#panel .date-display{font-size:10px;color:#555;margin-bottom:10px}
+#panel .mode-label{font-size:10px;color:#6366f1;margin-bottom:8px}
+
+/* Stats */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px}
+.stat-box{
+  background:rgba(255,255,255,0.03);border-radius:10px;padding:8px 6px;
+  text-align:center;border:1px solid rgba(255,255,255,0.04);
+}
+.stat-box .val{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.stat-box .lbl{font-size:8px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-top:1px}
+.stat-box.total .val{color:#fbbf24}
+
+/* Line filter */
+.line-filter{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:8px}
+.line-chip{
+  display:inline-flex;align-items:center;gap:3px;
+  padding:2px 6px;border-radius:5px;font-size:10px;cursor:pointer;
+  background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+  transition:all .15s;user-select:none;
+}
+.line-chip:hover{background:rgba(255,255,255,0.08)}
+.line-chip.off{opacity:.25}
+.line-chip .cdot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.line-chip .ccnt{font-weight:600;font-variant-numeric:tabular-nums;color:#aaa}
+
+/* Controls */
+.controls{display:flex;gap:4px;margin-bottom:8px}
+.controls button{
+  flex:1;padding:5px 6px;border:1px solid rgba(255,255,255,0.08);
+  background:rgba(255,255,255,0.04);color:#999;border-radius:6px;
+  cursor:pointer;font-size:10px;transition:all .15s;
+}
+.controls button:hover{background:rgba(255,255,255,0.08);color:#fff}
+.controls button.active{background:rgba(99,102,241,0.2);border-color:rgba(99,102,241,0.35);color:#fff}
+
+.speed-ctrl{display:flex;align-items:center;gap:5px;margin-bottom:8px}
+.speed-ctrl label{font-size:9px;color:#555;min-width:36px}
+.speed-ctrl input[type=range]{flex:1;accent-color:#6366f1;height:2px}
+.speed-ctrl .sv{font-size:9px;color:#6366f1;font-weight:600;min-width:24px;text-align:right}
+
+/* Tooltip */
+.tt{background:rgba(8,12,20,0.95)!important;border:1px solid rgba(255,255,255,0.1)!important;border-radius:8px!important;padding:8px 10px!important;box-shadow:0 4px 20px rgba(0,0,0,0.5)!important;color:#ddd!important;font-size:11px!important;line-height:1.5!important}
+.tt::before{display:none!important}
+.tt-dir{font-weight:600;color:#fff;font-size:12px}
+.tt-st{color:#aaa}
+.tt-tm{color:#6366f1}
+.tt-line{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;margin-top:2px}
+
+/* Station tooltip */
+.st-tip{background:rgba(8,12,20,0.9)!important;border:1px solid rgba(255,255,255,0.08)!important;border-radius:6px!important;padding:4px 8px!important;color:#ddd!important;font-size:10px!important;font-weight:500!important;box-shadow:0 2px 10px rgba(0,0,0,0.4)!important}
+.st-tip::before{display:none!important}
+.st-tip .stn-lines{display:flex;flex-wrap:wrap;gap:2px;margin-top:2px}
+.st-tip .stn-dot{width:6px;height:6px;border-radius:50%;display:inline-block}
+
+/* Marker styles */
+.station-marker{background:none!important;border:none!important}
+.st-dot{
+  width:6px;height:6px;border-radius:50%;
+  background:rgba(255,255,255,0.7);border:1.5px solid var(--lc,#888);
+  box-shadow:0 0 4px rgba(0,0,0,0.4);
+  transition:all .15s;
+}
+.st-dot:hover{transform:scale(2);box-shadow:0 0 10px var(--lc);z-index:10000!important}
+.st-dot.transfer{width:8px;height:8px;background:#fff;border-color:var(--lc)}
+.st-label{
+  font-size:8px;color:#bbb;white-space:nowrap;
+  text-shadow:0 0 3px #000,0 0 6px #000,0 1px 2px #000;
+  font-weight:500;pointer-events:none;
+}
+.st-label.terminal{font-weight:700;color:#fff;font-size:9px}
+
+.train-marker{background:none!important;border:none!important}
+.tr-dot{
+  width:14px;height:14px;position:relative;
+  box-shadow:0 0 8px var(--tc,#fff);
+  animation:pulse 2s ease-in-out infinite;
+  filter:drop-shadow(0 0 3px var(--tc));
+}
+@keyframes pulse{0%,100%{filter:drop-shadow(0 0 3px var(--tc))}50%{filter:drop-shadow(0 0 8px var(--tc)) drop-shadow(0 0 16px var(--tc))}}
+
+/* Line layer toggling */
+.line-layer-hidden .tr-dot{display:none!important}
+.line-layer-hidden .st-dot{opacity:.15!important}
+
+/* Responsive */
+@media(max-width:600px){
+  #panel{width:220px;padding:12px 14px;font-size:10px}
+  .stat-box .val{font-size:18px}
+  .time-display{font-size:26px!important}
+}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="panel">
+  <h1>北京地铁 · 实时模拟</h1>
+  <div class="subtitle">数据来源：Beijing-Subway-Tools · 基于时刻表推算</div>
+  <div class="time-display" id="clock">--:--<span class="sec">:--</span></div>
+  <div class="date-display" id="dateDisp"></div>
+  <div class="mode-label" id="modeLbl">实时模式</div>
+  
+  <div class="stat-grid">
+    <div class="stat-box"><div class="val" id="lineCount">0</div><div class="lbl">线路</div></div>
+    <div class="stat-box total"><div class="val" id="totalCount">0</div><div class="lbl">在线列车</div></div>
+  </div>
+
+  <div class="line-filter" id="lineFilter"></div>
+
+  <div class="controls">
+    <button id="btnRT" class="active" onclick="setMode('rt')">实时</button>
+    <button id="btnPeak" onclick="setMode('peak')">早高峰</button>
+    <button id="btnOP" onclick="setMode('op')">平峰</button>
+    <button id="btnEve" onclick="setMode('eve')">晚高峰</button>
+  </div>
+  <div class="speed-ctrl">
+    <label>速度</label>
+    <input type="range" id="spdSlider" min="1" max="300" value="1" oninput="setSpd(this.value)"/>
+    <span class="sv" id="spdVal">1×</span>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════════════════
+const LINES=__LINES__;
+
+// Pre-compute station index per line
+LINES.forEach(line=>{
+  line.stIdx={};
+  line.stations.forEach((s,i)=>{line.stIdx[s.name]=i;});
+  // Filter out stations without coordinates
+  line.stations=line.stations.filter(s=>s.lng!==null&&s.lat!==null);
+  // Rebuild index after filter
+  line.stIdx={};
+  line.stations.forEach((s,i)=>{line.stIdx[s.name]=i;});
+});
+
+// Track which lines are visible
+const lineVisible={};
+LINES.forEach((_,i)=>{lineVisible[i]=true;});
+
+// ═══════════════════════════════════════════════════════════
+// SIMULATION ENGINE
+// ═══════════════════════════════════════════════════════════
+let simTime=null,speed=1,mode='rt',lastTick=Date.now(),lastMinute=-1;
+
+function getDateGroup(d){
+  const day=d.getDay();
+  return(day===0||day===6)?'双休日':'工作日';
+}
+
+function getActiveTrains(line,dtime){
+  const dg=getDateGroup(dtime);
+  const tm=dtime.getHours()*60+dtime.getMinutes();
+  const ts=dtime.getSeconds(); // seconds for sub-minute smooth interpolation
+  const out=[];
+
+  function fmtM(m){return String(m/60|0).padStart(2,'0')+':'+String(m%60).padStart(2,'0');}
+
+  for(const dir of line.directions){
+    const dk=dir.key;
+    const schDir=line.schedule[dk];
+    if(!schDir||!schDir[dg])continue;
+
+    const stNames=line.stations.map(s=>s.name);
+    let orderedNames=stNames;
+    if(dir.reversed)orderedNames=[...stNames].reverse();
+
+    const firstSt=orderedNames[0];
+    const depTimes=schDir[dg][firstSt];
+    if(!depTimes||!depTimes.length)continue;
+
+    let trainIdx=0;
+    for(let di=0;di<depTimes.length;di++){
+      const depM=depTimes[di];
+      if(depM>tm+1)break; // times are sorted, no need to check further
+
+      let prevSt=firstSt,prevMin=depM,found=false;
+      for(let si=1;si<orderedNames.length;si++){
+        const curSt=orderedNames[si];
+        const curTimes=schDir[dg][curSt];
+        if(!curTimes)continue;
+
+        // Binary search for earliest time > prevMin
+        let lo=0,hi=curTimes.length-1,arrMin=-1;
+        while(lo<=hi){
+          const mid=(lo+hi)>>1;
+          if(curTimes[mid]>prevMin){arrMin=curTimes[mid];hi=mid-1;}
+          else{lo=mid+1;}
+        }
+        if(arrMin<0)break;
+
+        if(tm>=prevMin&&tm<arrMin){
+          // Sub-minute smooth interpolation using seconds
+          const durSec=(arrMin-prevMin)*60;
+          const elapsedSec=(tm-prevMin)*60+ts;
+          const pr=durSec>0?elapsedSec/durSec:0;
+          const fi=line.stIdx[prevSt],ti2=line.stIdx[curSt];
+          if(fi!==undefined&&ti2!==undefined){
+            out.push({
+              id:line.name+'_'+dk+'_'+trainIdx,
+              fi,ti:ti2,pr,
+              dir:dk,
+              from:prevSt,to:curSt,
+              dep:fmtM(prevMin),arr:fmtM(arrMin),
+              lineName:line.name,lineColor:line.color
+            });
+          }
+          found=true;
+          break;
+        }
+        prevSt=curSt;prevMin=arrMin;
+      }
+
+      if(!found&&line.loop&&orderedNames.length>1){
+        const loopTimes=schDir[dg][orderedNames[0]];
+        if(loopTimes){
+          let lo=0,hi=loopTimes.length-1,nextLoop=-1;
+          while(lo<=hi){
+            const mid=(lo+hi)>>1;
+            if(loopTimes[mid]>prevMin){nextLoop=loopTimes[mid];hi=mid-1;}
+            else{lo=mid+1;}
+          }
+          if(nextLoop>0&&tm>=prevMin&&tm<nextLoop){
+            const durSec=(nextLoop-prevMin)*60;
+            const elapsedSec=(tm-prevMin)*60+ts;
+            const pr=durSec>0?elapsedSec/durSec:0;
+            const fi=line.stIdx[prevSt],ti2=line.stIdx[orderedNames[0]];
+            if(fi!==undefined&&ti2!==undefined){
+              out.push({
+                id:line.name+'_'+dk+'_'+trainIdx+'_L',
+                fi,ti:ti2,pr,
+                dir:dk,
+                from:prevSt,to:orderedNames[0],
+                dep:fmtM(prevMin),arr:fmtM(nextLoop),
+                lineName:line.name,lineColor:line.color
+              });
+            }
+          }
+        }
+      }
+      trainIdx++;
+    }
+  }
+  return out;
+}
+
+function interp(train,line){
+  const f=line.stations[train.fi],t=line.stations[train.ti];
+  if(!f||!t)return null;
+  return{lng:f.lng+(t.lng-f.lng)*train.pr,lat:f.lat+(t.lat-f.lat)*train.pr};
+}
+
+function getBearing(from,to){
+  const dLng=(to.lng-from.lng)*Math.PI/180;
+  const lat1=from.lat*Math.PI/180,lat2=to.lat*Math.PI/180;
+  const y=Math.sin(dLng)*Math.cos(lat2);
+  const x=Math.cos(lat1)*Math.sin(lat2)-Math.sin(lat1)*Math.cos(lat2)*Math.cos(dLng);
+  return(Math.atan2(y,x)*180/Math.PI+360)%360;
+}
+
+function makeTrainIcon(color,bearing){
+  // Use CSS transform for rotation. 
+  // Bearing 0=North(up), 90=East(right), 180=South(down), 270=West(left)
+  // CSS rotate(): 0deg=up, positive=clockwise. 
+  // In a north-up map, bearing 90 (east) = CSS rotate(90deg) = points right. Correct!
+  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">'
+    +'<polygon points="10,1 19,18 1,18" fill="'+color+'" stroke="rgba(255,255,255,0.85)" stroke-width="1.5" stroke-linejoin="round"/>'
+    +'</svg>';
+  const b64='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(svg)));
+  return L.divIcon({
+    html:'<img src="'+b64+'" style="width:20px;height:20px;transform:rotate('+bearing+'deg);filter:drop-shadow(0 0 4px '+color+')">',
+    iconSize:[20,20],
+    iconAnchor:[10,10],
+    className:'train-marker'
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// MAP
+// ═══════════════════════════════════════════════════════════
+const map=L.map('map',{center:[39.92,116.40],zoom:11,zoomControl:false,attributionControl:false});
+// Gaode (Amap) dark tile - GCJ-02 coordinate system, fast in China
+L.tileLayer('https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=7',{
+  subdomains:'1234',maxZoom:18
+}).addTo(map);
+L.control.zoom({position:'bottomright'}).addTo(map);
+
+// Count station appearances for transfer detection
+const stationLines={};
+LINES.forEach((line,li)=>{
+  line.stations.forEach(s=>{
+    const k=s.name+'_'+s.lng.toFixed(4);
+    if(!stationLines[k])stationLines[k]={name:s.name,lng:s.lng,lat:s.lat,lines:[]};
+    stationLines[k].lines.push(li);
+  });
+});
+
+// Draw lines and stations
+const drawnStations=new Set();
+const linePolylines=[];
+
+LINES.forEach((line,li)=>{
+  const coords=line.stations.filter(s=>s.lng!==null).map(s=>[s.lat,s.lng]);
+  if(coords.length<2)return;
+
+  const polyOpts={color:line.color,weight:12,opacity:0.08};
+  const mainOpts={color:line.color,weight:2.5,opacity:0.6};
+  if(line.loop){polyOpts.closedPolyline=true;mainOpts.closedPolyline=true;}
+
+  const glow=L.polyline(coords,polyOpts).addTo(map);
+  const main=L.polyline(coords,mainOpts).addTo(map);
+  linePolylines.push({glow,main});
+
+  // Stations
+  line.stations.forEach((st,idx)=>{
+    const k=st.name+'_'+st.lng.toFixed(4);
+    if(drawnStations.has(k))return;
+    drawnStations.add(k);
+
+    const info=stationLines[k];
+    const isTransfer=info&&info.lines.length>1;
+    const isTerm=idx===0||idx===line.stations.length-1;
+
+    const size=isTransfer?8:6;
+    const icon=L.divIcon({
+      className:'station-marker',
+      html:'<div class="st-dot'+(isTransfer?' transfer':'')+'" style="--lc:'+line.color+'"></div>',
+      iconSize:[size,size],iconAnchor:[size/2,size/2]
+    });
+    const marker=L.marker([st.lat,st.lng],{icon,interactive:true,zIndexOffset:isTransfer?500:100}).addTo(map);
+
+    // Tooltip with station name + all lines
+    let tipHtml='<b>'+st.name+'</b>';
+    if(info&&info.lines.length>1){
+      tipHtml+='<div class="stn-lines">';
+      info.lines.forEach(lidx=>{
+        tipHtml+='<span class="stn-dot" style="background:'+LINES[lidx].color+'"></span>';
+      });
+      tipHtml+='</div>';
+    }
+    marker.bindTooltip(tipHtml,{className:'st-tip',direction:'top',offset:[0,-6]});
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// TRAIN LAYER
+// ═══════════════════════════════════════════════════════════
+let trainMarkers={};
+
+function updateTrains(){
+  const allTrains=[];
+  const lineCounts={};
+  const dtime=simTime||new Date();
+
+  LINES.forEach((line,li)=>{
+    if(!lineVisible[li])return;
+    const trains=getActiveTrains(line,dtime);
+    lineCounts[li]=trains.length;
+    trains.forEach(t=>allTrains.push({train:t,line}));
+  });
+
+  const curKeys=new Set(allTrains.map(t=>t.train.id));
+
+  // Remove old
+  for(const k of Object.keys(trainMarkers)){
+    if(!curKeys.has(k)){map.removeLayer(trainMarkers[k]);delete trainMarkers[k];}
+  }
+
+  // Add/update
+  allTrains.forEach(({train:t,line})=>{
+    const pos=interp(t,line);
+    if(!pos)return;
+
+    // Calculate bearing from departure station to arrival station
+    const from=line.stations[t.fi],to=line.stations[t.ti];
+    const bearing=from&&to?getBearing(from,to):0;
+
+    if(trainMarkers[t.id]){
+      const m=trainMarkers[t.id];
+      m.setLatLng([pos.lat,pos.lng]);
+      // Update icon rotation for smooth movement
+      m.setIcon(makeTrainIcon(line.color,bearing));
+    }else{
+      const m=L.marker([pos.lat,pos.lng],{icon:makeTrainIcon(line.color,bearing)}).addTo(map);
+      m.bindTooltip(
+        '<div class="tt-dir">'+t.dir+'</div>'+
+        '<div class="tt-st">'+t.from+' ➜ '+t.to+'</div>'+
+        '<div class="tt-tm">到站 '+t.arr+'</div>'+
+        '<div class="tt-line" style="background:'+line.color+'22;color:'+line.color+'">'+t.lineName+'</div>',
+        {className:'tt',direction:'top',offset:[0,-10]}
+      );
+      trainMarkers[t.id]=m;
+    }
+  });
+
+  // Update stats
+  const total=allTrains.length;
+  document.getElementById('totalCount').textContent=total;
+  document.getElementById('lineCount').textContent=LINES.filter((_,i)=>lineVisible[i]).length;
+
+  // Update line chips
+  let html='';
+  LINES.forEach((line,li)=>{
+    const c=lineCounts[li]||0;
+    const off=lineVisible[li]?'':'off';
+    html+='<span class="line-chip '+off+'" onclick="toggleLine('+li+')"><span class="cdot" style="background:'+line.color+'"></span><span class="ccnt">'+c+'</span></span>';
+  });
+  document.getElementById('lineFilter').innerHTML=html;
+}
+
+function toggleLine(li){
+  lineVisible[li]=!lineVisible[li];
+  const pl=linePolylines[li];
+  if(pl){
+    if(lineVisible[li]){
+      map.addLayer(pl.glow);map.addLayer(pl.main);
+    }else{
+      map.removeLayer(pl.glow);map.removeLayer(pl.main);
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// CLOCK
+// ═══════════════════════════════════════════════════════════
+const WK=['日','一','二','三','四','五','六'];
+function updateClock(){
+  const t=simTime||new Date();
+  const h=String(t.getHours()).padStart(2,'0');
+  const m=String(t.getMinutes()).padStart(2,'0');
+  const s=String(t.getSeconds()).padStart(2,'0');
+  document.getElementById('clock').innerHTML=h+':'+m+'<span class="sec">:'+s+'</span>';
+  document.getElementById('dateDisp').textContent=t.getFullYear()+'年'+(t.getMonth()+1)+'月'+t.getDate()+'日 周'+WK[t.getDay()];
+}
+
+// ═══════════════════════════════════════════════════════════
+// MODES
+// ═══════════════════════════════════════════════════════════
+function setMode(m){
+  mode=m;
+  document.querySelectorAll('.controls button').forEach(b=>b.classList.remove('active'));
+  const d=new Date();
+  if(m==='rt'){simTime=null;speed=1;document.getElementById('btnRT').classList.add('active');document.getElementById('spdSlider').value=1;document.getElementById('spdVal').textContent='1×';document.getElementById('modeLbl').textContent='实时模式';}
+  else if(m==='peak'){simTime=new Date(d.getFullYear(),d.getMonth(),d.getDate(),8,0,0);speed=60;document.getElementById('btnPeak').classList.add('active');document.getElementById('spdSlider').value=60;document.getElementById('spdVal').textContent='60×';document.getElementById('modeLbl').textContent='早高峰 08:00';}
+  else if(m==='op'){simTime=new Date(d.getFullYear(),d.getMonth(),d.getDate(),13,0,0);speed=60;document.getElementById('btnOP').classList.add('active');document.getElementById('spdSlider').value=60;document.getElementById('spdVal').textContent='60×';document.getElementById('modeLbl').textContent='平峰 13:00';}
+  else if(m==='eve'){simTime=new Date(d.getFullYear(),d.getMonth(),d.getDate(),18,0,0);speed=60;document.getElementById('btnEve').classList.add('active');document.getElementById('spdSlider').value=60;document.getElementById('spdVal').textContent='60×';document.getElementById('modeLbl').textContent='晚高峰 18:00';}
+  // Clear existing train markers
+  Object.keys(trainMarkers).forEach(k=>{map.removeLayer(trainMarkers[k]);delete trainMarkers[k];});
+}
+function setSpd(v){
+  speed=parseInt(v);
+  document.getElementById('spdVal').textContent=v+'×';
+  if(mode==='rt'&&v>1){simTime=new Date();mode='sim';document.querySelectorAll('.controls button').forEach(b=>b.classList.remove('active'));document.getElementById('modeLbl').textContent=v+'× 快进';}
+}
+
+// ═══════════════════════════════════════════════════════════
+// MAIN LOOP
+// ═══════════════════════════════════════════════════════════
+let frameCount=0,lastTrainMinute=-1;
+function tick(){
+  const now=Date.now(),dt=now-lastTick;lastTick=now;
+  if(simTime&&speed>1)simTime=new Date(simTime.getTime()+dt*speed);
+  updateClock();
+  const dtime=simTime||new Date();
+  const curMin=dtime.getHours()*60+dtime.getMinutes();
+  // Update trains every frame for smooth animation
+  if(curMin!==lastTrainMinute){
+    // New minute: full recalculation (needed for new/departed trains)
+    lastTrainMinute=curMin;
+    updateTrains();
+  }else{
+    // Same minute: just reposition existing trains (smooth interpolation)
+    const allTrains=[];
+    LINES.forEach((line,li)=>{
+      if(!lineVisible[li])return;
+      const trains=getActiveTrains(line,dtime);
+      trains.forEach(t=>allTrains.push({train:t,line}));
+    });
+    // Only reposition, don't add/remove markers
+    allTrains.forEach(({train:t,line})=>{
+      const m=trainMarkers[t.id];
+      if(!m)return;
+      const pos=interp(t,line);
+      if(!pos)return;
+      m.setLatLng([pos.lat,pos.lng]);
+    });
+  }
+  requestAnimationFrame(tick);
+}
+tick();
+
+// Fit bounds
+let allCoords=[];
+LINES.forEach(line=>line.stations.forEach(s=>{if(s.lng!==null)allCoords.push([s.lat,s.lng]);}));
+if(allCoords.length)map.fitBounds(L.latLngBounds(allCoords).pad(0.05));
+</script>
+</body>
+</html>
