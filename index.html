@@ -340,10 +340,11 @@ function makeTrainIcon(color,bearing){
 // ═══════════════════════════════════════════════════════════
 const map=L.map('map',{center:[39.92,116.40],zoom:11,zoomControl:false,attributionControl:false});
 // Gaode (Amap) tiles - GCJ-02 coordinate system, fast in China
-const tileDay=L.tileLayer('https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=6',{
+// style=7: 矢量地图(标准地图), style=6: 卫星影像
+const tileDay=L.tileLayer('https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=7',{
   subdomains:'1234',maxZoom:18
 });
-const tileNight=L.tileLayer('https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=7',{
+const tileNight=L.tileLayer('https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=6',{
   subdomains:'1234',maxZoom:18
 });
 let isNightMode=null;
