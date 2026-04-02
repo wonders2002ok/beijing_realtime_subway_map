@@ -11,6 +11,8 @@
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans SC",sans-serif;background:#080c14;color:#e0e0e0;overflow:hidden}
 #map{position:absolute;top:0;bottom:0;left:0;right:0;z-index:1}
 .leaflet-container{background:#080c14!important}
+/* Dim the basemap so subway lines stand out */
+.leaflet-tile-pane{filter:brightness(0.55) saturate(0.6)}
 
 /* Panel */
 #panel{
@@ -92,13 +94,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
 /* Marker styles */
 .station-marker{background:none!important;border:none!important}
 .st-dot{
-  width:6px;height:6px;border-radius:50%;
-  background:rgba(255,255,255,0.7);border:1.5px solid var(--lc,#888);
-  box-shadow:0 0 4px rgba(0,0,0,0.4);
+  width:8px;height:8px;border-radius:50%;
+  background:rgba(255,255,255,0.85);border:2px solid var(--lc,#888);
+  box-shadow:0 0 6px var(--lc);
   transition:all .15s;
 }
-.st-dot:hover{transform:scale(2);box-shadow:0 0 10px var(--lc);z-index:10000!important}
-.st-dot.transfer{width:8px;height:8px;background:#fff;border-color:var(--lc)}
+.st-dot:hover{transform:scale(2.5);box-shadow:0 0 14px var(--lc);z-index:10000!important}
+.st-dot.transfer{width:11px;height:11px;background:#fff;border-width:2.5px;box-shadow:0 0 8px var(--lc)}
 .st-label{
   font-size:8px;color:#bbb;white-space:nowrap;
   text-shadow:0 0 3px #000,0 0 6px #000,0 1px 2px #000;
@@ -303,14 +305,14 @@ function makeTrainIcon(color,bearing){
   // Bearing 0=North(up), 90=East(right), 180=South(down), 270=West(left)
   // CSS rotate(): 0deg=up, positive=clockwise. 
   // In a north-up map, bearing 90 (east) = CSS rotate(90deg) = points right. Correct!
-  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">'
-    +'<polygon points="10,1 19,18 1,18" fill="'+color+'" stroke="rgba(255,255,255,0.85)" stroke-width="1.5" stroke-linejoin="round"/>'
+  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">'
+    +'<polygon points="12,1 23,21 1,21" fill="'+color+'" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>'
     +'</svg>';
   const b64='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(svg)));
   return L.divIcon({
-    html:'<img src="'+b64+'" style="width:20px;height:20px;transform:rotate('+bearing+'deg);filter:drop-shadow(0 0 4px '+color+')">',
-    iconSize:[20,20],
-    iconAnchor:[10,10],
+    html:'<img src="'+b64+'" style="width:24px;height:24px;transform:rotate('+bearing+'deg);filter:drop-shadow(0 0 5px '+color+') drop-shadow(0 0 10px '+color+')"> ',
+    iconSize:[24,24],
+    iconAnchor:[12,12],
     className:'train-marker'
   });
 }
@@ -343,8 +345,8 @@ LINES.forEach((line,li)=>{
   const coords=line.stations.filter(s=>s.lng!==null).map(s=>[s.lat,s.lng]);
   if(coords.length<2)return;
 
-  const polyOpts={color:line.color,weight:12,opacity:0.08};
-  const mainOpts={color:line.color,weight:2.5,opacity:0.6};
+  const polyOpts={color:line.color,weight:18,opacity:0.2};
+  const mainOpts={color:line.color,weight:4,opacity:0.85};
   if(line.loop){polyOpts.closedPolyline=true;mainOpts.closedPolyline=true;}
 
   const glow=L.polyline(coords,polyOpts).addTo(map);
@@ -361,7 +363,7 @@ LINES.forEach((line,li)=>{
     const isTransfer=info&&info.lines.length>1;
     const isTerm=idx===0||idx===line.stations.length-1;
 
-    const size=isTransfer?8:6;
+    const size=isTransfer?11:8;
     const icon=L.divIcon({
       className:'station-marker',
       html:'<div class="st-dot'+(isTransfer?' transfer':'')+'" style="--lc:'+line.color+'"></div>',
