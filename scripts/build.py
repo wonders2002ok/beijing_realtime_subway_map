@@ -12,10 +12,11 @@ except ImportError:
     sys.exit(1)
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-AMAP_PATH = os.path.join(BASE, 'amap_beijing.json')
-TOOLS_DATA = os.path.join(BASE, '..', 'Beijing-Subway-Tools', 'data', 'beijing')
-TEMPLATE_PATH = os.path.join(BASE, 'template.html')
-OUTPUT_PATH = os.path.join(BASE, 'index.html')
+PROJECT_ROOT = os.path.dirname(BASE)
+AMAP_PATH = os.path.join(PROJECT_ROOT, 'data', 'amap_beijing.json')
+TOOLS_DATA = os.path.join(PROJECT_ROOT, '..', 'Beijing-Subway-Tools', 'data', 'beijing')
+TEMPLATE_PATH = os.path.join(PROJECT_ROOT, 'template.html')
+OUTPUT_PATH = os.path.join(PROJECT_ROOT, 'index.html')
 
 # ── Load Amap coordinates ──
 print("Loading Amap coordinates...")
