@@ -49,18 +49,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
 .stat-box .lbl{font-size:8px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-top:1px}
 .stat-box.total .val{color:#fbbf24}
 
-/* Line filter */
-.line-filter{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:8px}
+/* Line list (legend) */
+.line-filter{
+  display:flex;flex-direction:column;gap:2px;
+  margin-bottom:8px;max-height:260px;overflow-y:auto;
+  scrollbar-width:thin;scrollbar-color:#333 transparent;
+}
+.line-filter::-webkit-scrollbar{width:3px}
+.line-filter::-webkit-scrollbar-thumb{background:#444;border-radius:2px}
 .line-chip{
-  display:inline-flex;align-items:center;gap:3px;
-  padding:2px 6px;border-radius:5px;font-size:10px;cursor:pointer;
-  background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+  display:flex;align-items:center;gap:6px;
+  padding:3px 8px;border-radius:6px;font-size:11px;cursor:pointer;
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);
   transition:all .15s;user-select:none;
 }
-.line-chip:hover{background:rgba(255,255,255,0.08)}
+.line-chip:hover{background:rgba(255,255,255,0.06)}
 .line-chip.off{opacity:.25}
-.line-chip .cdot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-.line-chip .ccnt{font-weight:600;font-variant-numeric:tabular-nums;color:#aaa}
+.line-chip .cdot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.line-chip .cname{font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#ccc;font-size:11px}
+.line-chip .cdir{font-size:9px;color:#666;white-space:nowrap;font-variant-numeric:tabular-nums}
+.line-chip .cdir b{color:#999;font-weight:600}
 
 /* Controls */
 .controls{display:flex;gap:4px;margin-bottom:8px}
@@ -78,12 +86,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
 .speed-ctrl .sv{font-size:9px;color:#6366f1;font-weight:600;min-width:24px;text-align:right}
 
 /* Tooltip */
-.tt{background:rgba(8,12,20,0.95)!important;border:1px solid rgba(255,255,255,0.1)!important;border-radius:8px!important;padding:8px 10px!important;box-shadow:0 4px 20px rgba(0,0,0,0.5)!important;color:#ddd!important;font-size:11px!important;line-height:1.5!important}
+.tt{background:rgba(8,12,20,0.92)!important;border:1px solid rgba(255,255,255,0.1)!important;border-radius:6px!important;padding:6px 8px!important;color:#ddd!important;font-size:10px!important;line-height:1.4!important}
 .tt::before{display:none!important}
-.tt-dir{font-weight:600;color:#fff;font-size:12px}
+.tt-dir{font-weight:600;color:#fff;font-size:11px}
 .tt-st{color:#aaa}
-.tt-tm{color:#6366f1}
-.tt-line{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;margin-top:2px}
+.tt-tm{color:#999}
+.tt-line{display:inline-block;padding:1px 5px;border-radius:3px;font-size:9px;margin-top:2px}
 
 /* Station tooltip */
 .st-tip{background:rgba(8,12,20,0.9)!important;border:1px solid rgba(255,255,255,0.08)!important;border-radius:6px!important;padding:4px 8px!important;color:#ddd!important;font-size:10px!important;font-weight:500!important;box-shadow:0 2px 10px rgba(0,0,0,0.4)!important}
@@ -94,13 +102,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
 /* Marker styles */
 .station-marker{background:none!important;border:none!important}
 .st-dot{
-  width:8px;height:8px;border-radius:50%;
+  width:6px;height:6px;border-radius:50%;
   background:rgba(255,255,255,0.85);border:2px solid var(--lc,#888);
-  box-shadow:0 0 6px var(--lc);
-  transition:all .15s;
 }
-.st-dot:hover{transform:scale(2.5);box-shadow:0 0 14px var(--lc);z-index:10000!important}
-.st-dot.transfer{width:11px;height:11px;background:#fff;border-width:2.5px;box-shadow:0 0 8px var(--lc)}
+.st-dot.transfer{width:9px;height:9px;background:#fff;border-width:2px}
 .st-label{
   font-size:8px;color:#bbb;white-space:nowrap;
   text-shadow:0 0 3px #000,0 0 6px #000,0 1px 2px #000;
@@ -109,16 +114,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
 .st-label.terminal{font-weight:700;color:#fff;font-size:9px}
 
 .train-marker{background:none!important;border:none!important}
-.tr-dot{
-  width:14px;height:14px;position:relative;
-  box-shadow:0 0 8px var(--tc,#fff);
-  animation:pulse 2s ease-in-out infinite;
-  filter:drop-shadow(0 0 3px var(--tc));
-}
-@keyframes pulse{0%,100%{filter:drop-shadow(0 0 3px var(--tc))}50%{filter:drop-shadow(0 0 8px var(--tc)) drop-shadow(0 0 16px var(--tc))}}
 
 /* Line layer toggling */
-.line-layer-hidden .tr-dot{display:none!important}
 .line-layer-hidden .st-dot{opacity:.15!important}
 
 /* Responsive */
@@ -319,18 +316,14 @@ function getBearing(from,to){
 }
 
 function makeTrainIcon(color,bearing){
-  // Use CSS transform for rotation. 
-  // Bearing 0=North(up), 90=East(right), 180=South(down), 270=West(left)
-  // CSS rotate(): 0deg=up, positive=clockwise. 
-  // In a north-up map, bearing 90 (east) = CSS rotate(90deg) = points right. Correct!
-  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">'
-    +'<polygon points="12,1 23,21 1,21" fill="'+color+'" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>'
+  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">'
+    +'<polygon points="8,1 15,14 1,14" fill="'+color+'" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>'
     +'</svg>';
   const b64='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(svg)));
   return L.divIcon({
-    html:'<img src="'+b64+'" style="width:24px;height:24px;transform:rotate('+bearing+'deg);filter:drop-shadow(0 0 5px '+color+') drop-shadow(0 0 10px '+color+')"> ',
-    iconSize:[24,24],
-    iconAnchor:[12,12],
+    html:'<img src="'+b64+'" style="width:16px;height:16px;transform:rotate('+bearing+'deg)">',
+    iconSize:[16,16],
+    iconAnchor:[8,8],
     className:'train-marker'
   });
 }
@@ -384,13 +377,11 @@ LINES.forEach((line,li)=>{
   const coords=line.stations.filter(s=>s.lng!==null).map(s=>[s.lat,s.lng]);
   if(coords.length<2)return;
 
-  const polyOpts={color:line.color,weight:18,opacity:0.2};
-  const mainOpts={color:line.color,weight:4,opacity:0.85};
-  if(line.loop){polyOpts.closedPolyline=true;mainOpts.closedPolyline=true;}
+  const mainOpts={color:line.color,weight:5,opacity:0.9};
+  if(line.loop){mainOpts.closedPolyline=true;}
 
-  const glow=L.polyline(coords,polyOpts).addTo(map);
   const main=L.polyline(coords,mainOpts).addTo(map);
-  linePolylines.push({glow,main});
+  linePolylines.push({main});
 
   // Stations
   line.stations.forEach((st,idx)=>{
@@ -430,13 +421,17 @@ let trainMarkers={};
 
 function updateTrains(){
   const allTrains=[];
-  const lineCounts={};
+  const lineDirCounts={}; // li -> {dirKey: count, _total: count}
   const dtime=simTime||new Date();
 
   LINES.forEach((line,li)=>{
     if(!lineVisible[li])return;
     const trains=getActiveTrains(line,dtime);
-    lineCounts[li]=trains.length;
+    lineDirCounts[li]={'_total':trains.length};
+    trains.forEach(t=>{
+      if(!lineDirCounts[li][t.dir])lineDirCounts[li][t.dir]=0;
+      lineDirCounts[li][t.dir]++;
+    });
     trains.forEach(t=>allTrains.push({train:t,line}));
   });
 
@@ -452,14 +447,12 @@ function updateTrains(){
     const pos=interp(t,line);
     if(!pos)return;
 
-    // Calculate bearing from departure station to arrival station
     const from=line.stations[t.fi],to=line.stations[t.ti];
     const bearing=from&&to?getBearing(from,to):0;
 
     if(trainMarkers[t.id]){
       const m=trainMarkers[t.id];
       m.setLatLng([pos.lat,pos.lng]);
-      // Update icon rotation for smooth movement
       m.setIcon(makeTrainIcon(line.color,bearing));
     }else{
       const m=L.marker([pos.lat,pos.lng],{icon:makeTrainIcon(line.color,bearing)}).addTo(map);
@@ -479,12 +472,27 @@ function updateTrains(){
   document.getElementById('totalCount').textContent=total;
   document.getElementById('lineCount').textContent=LINES.filter((_,i)=>lineVisible[i]).length;
 
-  // Update line chips
+  // Update line list
   let html='';
   LINES.forEach((line,li)=>{
-    const c=lineCounts[li]||0;
+    const dc=lineDirCounts[li];
+    const total=dc?dc._total:0;
     const off=lineVisible[li]?'':'off';
-    html+='<span class="line-chip '+off+'" onclick="toggleLine('+li+')"><span class="cdot" style="background:'+line.color+'"></span><span class="ccnt">'+c+'</span></span>';
+    // Build direction breakdown: "东行 5 | 西行 3"
+    let dirHtml='';
+    if(dc&&line.directions){
+      const parts=[];
+      line.directions.forEach(d=>{
+        const cnt=dc[d.key]||0;
+        parts.push('<b>'+cnt+'</b> '+d.key);
+      });
+      dirHtml=parts.join(' &middot; ');
+    }
+    html+='<div class="line-chip '+off+'" onclick="toggleLine('+li+')">'
+      +'<span class="cdot" style="background:'+line.color+'"></span>'
+      +'<span class="cname">'+line.name+'</span>'
+      +'<span class="cdir">'+dirHtml+'</span>'
+      +'</div>';
   });
   document.getElementById('lineFilter').innerHTML=html;
 }
@@ -494,9 +502,9 @@ function toggleLine(li){
   const pl=linePolylines[li];
   if(pl){
     if(lineVisible[li]){
-      map.addLayer(pl.glow);map.addLayer(pl.main);
+      map.addLayer(pl.main);
     }else{
-      map.removeLayer(pl.glow);map.removeLayer(pl.main);
+      map.removeLayer(pl.main);
     }
   }
 }
