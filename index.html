@@ -377,9 +377,10 @@ LINES.forEach((line,li)=>{
   const coords=line.stations.filter(s=>s.lng!==null).map(s=>[s.lat,s.lng]);
   if(coords.length<2)return;
 
-  const mainOpts={color:line.color,weight:5,opacity:0.9};
-  if(line.loop){mainOpts.closedPolyline=true;}
+  // Close loop by appending first station's coordinate to the end
+  if(line.loop){coords.push(coords[0]);}
 
+  const mainOpts={color:line.color,weight:5,opacity:0.9};
   const main=L.polyline(coords,mainOpts).addTo(map);
   linePolylines.push({main});
 
