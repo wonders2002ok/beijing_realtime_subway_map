@@ -101,11 +101,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
 
 /* Marker styles */
 .station-marker{background:none!important;border:none!important}
+/* Regular station: white circle with line-color border (Beijing subway standard) */
 .st-dot{
-  width:6px;height:6px;border-radius:50%;
-  background:rgba(255,255,255,0.85);border:2px solid var(--lc,#888);
+  width:10px;height:10px;border-radius:50%;
+  background:#fff;border:2.5px solid var(--lc,#888);
+  box-shadow:0 1px 3px rgba(0,0,0,0.4);
 }
-.st-dot.transfer{width:9px;height:9px;background:#fff;border-width:2px}
 .st-label{
   font-size:8px;color:#bbb;white-space:nowrap;
   text-shadow:0 0 3px #000,0 0 6px #000,0 1px 2px #000;
@@ -394,11 +395,23 @@ LINES.forEach((line,li)=>{
     const isTransfer=info&&info.lines.length>1;
     const isTerm=idx===0||idx===line.stations.length-1;
 
-    const size=isTransfer?11:8;
+    let iconHtml,iconSize;
+    if(isTransfer){
+      // Beijing subway standard transfer icon: larger white circle + dark border + cross pattern
+      iconSize=18;
+      iconHtml='<svg viewBox="0 0 20 20" width="18" height="18">'
+        +'<circle cx="10" cy="10" r="8.5" fill="#fff" stroke="#222" stroke-width="2"/>'
+        +'<line x1="10" y1="3.5" x2="10" y2="16.5" stroke="#222" stroke-width="1.2"/>'
+        +'<line x1="3.5" y1="10" x2="16.5" y2="10" stroke="#222" stroke-width="1.2"/>'
+        +'</svg>';
+    }else{
+      iconSize=14;
+      iconHtml='<div class="st-dot" style="--lc:'+line.color+'"></div>';
+    }
     const icon=L.divIcon({
       className:'station-marker',
-      html:'<div class="st-dot'+(isTransfer?' transfer':'')+'" style="--lc:'+line.color+'"></div>',
-      iconSize:[size,size],iconAnchor:[size/2,size/2]
+      html:iconHtml,
+      iconSize:[iconSize,iconSize],iconAnchor:[iconSize/2,iconSize/2]
     });
     const marker=L.marker([st.lat,st.lng],{icon,interactive:true,zIndexOffset:isTransfer?500:100}).addTo(map);
 
@@ -411,7 +424,7 @@ LINES.forEach((line,li)=>{
       });
       tipHtml+='</div>';
     }
-    marker.bindTooltip(tipHtml,{className:'st-tip',direction:'top',offset:[0,-6]});
+    marker.bindTooltip(tipHtml,{className:'st-tip',direction:'top',offset:[0,-10]});
   });
 });
 
