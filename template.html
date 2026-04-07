@@ -336,32 +336,53 @@ function getActiveTrains(line,dtime){
         prevSt=curSt;prevMin=arrMin;
       }
 
-      // Loop line: check if train is on the last segment (returning to first station)
+      // Loop line: check if train is on the closing segment (last station → first station)
       if(!found&&line.loop&&orderedNames.length>1){
-        const loopTimes=schDir[dg][orderedNames[0]];
-        if(loopTimes){
-          let lo=0,hi=loopTimes.length-1,nextLoop=-1;
-          while(lo<=hi){
-            const mid=(lo+hi)>>1;
-            if(loopTimes[mid]>prevMin){nextLoop=loopTimes[mid];hi=mid-1;}
-            else{lo=mid+1;}
-          }
-          if(nextLoop>0&&effectiveTm>=prevMin&&effectiveTm<nextLoop){
-            const durSec=(nextLoop-prevMin)*60;
-            const elapsedSec=(effectiveTm-prevMin)*60+ts;
-            const pr=durSec>0?elapsedSec/durSec:0;
-            const fi=line.stIdx[prevSt],ti2=line.stIdx[orderedNames[0]];
-            if(fi!==undefined&&ti2!==undefined){
-              out.push({
-                id:makeTrainId(line.name,dk,trainIdx)+'L',
-                fi,ti:ti2,pr,
-                dir:dk,
-                from:prevSt,to:orderedNames[0],
-                dep:fmtM(prevMin),arr:fmtM(nextLoop),
-                lineName:line.name,lineColor:line.color
-              });
-              found=true;
+        // Estimate loop closing time from average of last 3 segment durations
+        const lastStIdx=orderedNames.length-1;
+        let totalSegTime=0,segCount=0;
+        const last3From=orderedNames[Math.max(0,lastStIdx-3)];
+        const last3Times=schDir[dg][last3From];
+        if(last3Times){
+          const last3Idx=orderedNames.indexOf(last3From);
+          const nextSt=orderedNames[last3Idx+1];
+          if(nextSt){
+            const nextTimes=schDir[dg][nextSt];
+            if(nextTimes){
+              for(let k=Math.max(0,last3Times.length-3);k<last3Times.length;k++){
+                const fromMin=last3Times[k];
+                let lo3=0,hi3=nextTimes.length-1,nextMin=-1;
+                while(lo3<=hi3){const mid=(lo3+hi3)>>1;if(nextTimes[mid]>fromMin){nextMin=nextTimes[mid];hi3=mid-1;}else{lo3=mid+1;}}
+                if(nextMin>0){totalSegTime+=(nextMin-fromMin);segCount++;}
+              }
             }
+          }
+        }
+        const avgSegTime=segCount>0?Math.round(totalSegTime/segCount):3;
+        const nextLoop=prevMin+avgSegTime;
+
+        if(effectiveTm>=prevMin&&effectiveTm<nextLoop){
+          const durSec=(nextLoop-prevMin)*60;
+          const elapsedSec=(effectiveTm-prevMin)*60+ts;
+          const pr=durSec>0?elapsedSec/durSec:0;
+          const fi=line.stIdx[prevSt],ti2=line.stIdx[orderedNames[0]];
+          if(fi!==undefined&&ti2!==undefined){
+            // Build path along the line direction for correct multi-segment interpolation
+            const path=[];
+            for(let p=0;p<orderedNames.length;p++){
+              const idx=line.stIdx[orderedNames[p]];
+              if(idx!==undefined)path.push(idx);
+            }
+            out.push({
+              id:makeTrainId(line.name,dk,trainIdx)+'L',
+              fi,ti:ti2,pr,
+              dir:dk,
+              from:prevSt,to:orderedNames[0],
+              dep:fmtM(prevMin),arr:fmtM(nextLoop),
+              lineName:line.name,lineColor:line.color,
+              path
+            });
+            found=true;
           }
         }
       }
@@ -376,6 +397,29 @@ function getActiveTrains(line,dtime){
 function interp(train,line){
   const f=line.stations[train.fi],t=line.stations[train.ti];
   if(!f||!t)return null;
+  // If train has a path (loop return segment), interpolate along all intermediate stations
+  if(train.path&&train.path.length>1){
+    let totalDist=0;
+    const segs=[];
+    for(let i=1;i<train.path.length;i++){
+      const a=line.stations[train.path[i-1]],b=line.stations[train.path[i]];
+      if(!a||!b)continue;
+      const dx=b.lng-a.lng,dy=b.lat-a.lat;
+      const d=Math.sqrt(dx*dx+dy*dy);
+      segs.push({i,dist:totalDist,from:a,to:b,dx,dy});
+      totalDist+=d;
+    }
+    const targetDist=train.pr*totalDist;
+    for(let i=segs.length-1;i>=0;i--){
+      if(targetDist>=segs[i].dist){
+        const seg=segs[i];
+        const segPr=seg.d>0?(targetDist-segs[i].dist)/seg.d:0;
+        return{lng:seg.from.lng+seg.dx*segPr,lat:seg.from.lat+seg.dy*segPr};
+      }
+    }
+    const last=line.stations[train.path[train.path.length-1]];
+    return{lng:last.lng,lat:last.lat};
+  }
   return{lng:f.lng+(t.lng-f.lng)*train.pr,lat:f.lat+(t.lat-f.lat)*train.pr};
 }
 
