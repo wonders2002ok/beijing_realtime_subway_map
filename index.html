@@ -86,26 +86,67 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
 .speed-ctrl .sv{font-size:9px;color:#6366f1;font-weight:600;min-width:24px;text-align:right}
 
 /* Tooltip */
-.tt{background:rgba(8,12,20,0.92)!important;border:1px solid rgba(255,255,255,0.1)!important;border-radius:6px!important;padding:6px 8px!important;color:#ddd!important;font-size:10px!important;line-height:1.4!important}
+.tt{background:rgba(8,12,20,0.92)!important;border:1px solid rgba(255,255,255,0.1)!important;border-radius:6px!important;padding:6px 8px!important;color:#ddd!important;font-size:12px!important;line-height:1.5!important}
 .tt::before{display:none!important}
-.tt-dir{font-weight:600;color:#fff;font-size:11px}
-.tt-st{color:#aaa}
-.tt-tm{color:#999}
-.tt-line{display:inline-block;padding:1px 5px;border-radius:3px;font-size:9px;margin-top:2px}
+.tt-dir{font-weight:600;color:#fff;font-size:13px}
+.tt-no{font-family:'Courier New',monospace;font-weight:700;color:#818cf8;font-size:13px;letter-spacing:.5px}
+.tt-st{color:#aaa;font-size:12px}
+.tt-tm{color:#999;font-size:12px}
+.tt-line{display:inline-block;padding:1px 5px;border-radius:3px;font-size:11px;margin-top:2px}
 
 /* Station tooltip */
-.st-tip{background:rgba(8,12,20,0.9)!important;border:1px solid rgba(255,255,255,0.08)!important;border-radius:6px!important;padding:4px 8px!important;color:#ddd!important;font-size:10px!important;font-weight:500!important;box-shadow:0 2px 10px rgba(0,0,0,0.4)!important}
+.st-tip{background:rgba(8,12,20,0.9)!important;border:1px solid rgba(255,255,255,0.08)!important;border-radius:6px!important;padding:4px 8px!important;color:#ddd!important;font-size:12px!important;font-weight:500!important;box-shadow:0 2px 10px rgba(0,0,0,0.4)!important}
 .st-tip::before{display:none!important}
 .st-tip .stn-lines{display:flex;flex-wrap:wrap;gap:2px;margin-top:2px}
 .st-tip .stn-dot{width:6px;height:6px;border-radius:50%;display:inline-block}
+
+/* Persistent popup for trains & stations */
+.popup-card .leaflet-popup-content-wrapper{
+  background:rgba(10,14,24,0.96)!important;border:1px solid rgba(255,255,255,0.1)!important;
+  border-radius:12px!important;padding:0!important;color:#ddd!important;
+  box-shadow:0 8px 32px rgba(0,0,0,0.6)!important;
+}
+.popup-card .leaflet-popup-content{
+  margin:16px 18px!important;font-size:13px!important;line-height:1.6!important;min-width:220px;
+}
+.popup-card .leaflet-popup-tip{background:rgba(10,14,24,0.96)!important;border:none!important}
+.popup-card .popup-close{
+  position:absolute;top:10px;right:14px;cursor:pointer;z-index:2;
+  font-size:20px;color:#666;line-height:1;
+  transition:color .15s;
+}
+.popup-card .popup-close:hover{color:#fff}
+.popup-card .popup-title{font-weight:700;font-size:15px;color:#fff;margin-bottom:6px;margin-right:24px}
+.popup-card .popup-row{margin-bottom:4px;font-size:13px}
+.popup-card .popup-row b{color:#ccc;font-weight:600}
+.popup-card .popup-lines{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.popup-card .popup-line-tag{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:2px 8px;border-radius:6px;font-size:12px;font-weight:600;
+}
+.popup-card .popup-addr{font-size:11px;color:#666;margin-top:6px}
+
+/* Train popup extras */
+.popup-card .train-no{
+  font-family:'Courier New',monospace;font-weight:700;
+  color:#818cf8;font-size:16px;letter-spacing:1px;
+}
+
+/* Highlight mode: dim non-selected lines */
+.line-dimmed{opacity:.15!important;transition:opacity .3s}
+.line-dimmed .st-dot,.line-dimmed .st-transfer-icon{opacity:.15!important}
+.line-dimmed .train-marker{opacity:.15!important}
+.line-chip.highlighted{background:rgba(255,255,255,0.08)!important;border-color:rgba(255,255,255,0.15)!important}
 
 /* Marker styles */
 .station-marker{background:none!important;border:none!important}
 /* Regular station: white circle with line-color border (Beijing subway standard) */
 .st-dot{
-  width:10px;height:10px;border-radius:50%;
+  width:15px;height:15px;border-radius:50%;
   background:#fff;border:2.5px solid var(--lc,#888);
   box-shadow:0 1px 3px rgba(0,0,0,0.4);
+  transform:scale(var(--station-scale,0.53));
+  transition:transform .25s ease;
 }
 .st-label{
   font-size:8px;color:#bbb;white-space:nowrap;
@@ -116,8 +157,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
 
 .train-marker{background:none!important;border:none!important}
 
-/* Line layer toggling */
+/* Station icon zoom-dependent scaling — all station markers use --station-scale */
 .line-layer-hidden .st-dot{opacity:.15!important}
+.line-layer-hidden .st-transfer-icon{opacity:.15!important}
+.st-transfer-icon{
+  width:15px;height:15px;
+  transform:scale(var(--station-scale,0.53));
+  transition:transform .25s ease;
+}
 
 /* Responsive */
 @media(max-width:600px){
@@ -182,6 +229,30 @@ LINES.forEach((_,i)=>{lineVisible[i]=true;});
 // SIMULATION ENGINE
 // ═══════════════════════════════════════════════════════════
 let simTime=null,speed=1,mode='rt',lastTick=Date.now(),lastMinute=-1;
+
+// Train number code mapping
+const LINE_CODES={
+  '1号线':'01','2号线':'02','3号线':'03','4号线':'04','5号线':'05',
+  '6号线':'06','7号线':'07','8号线':'08','9号线':'09','10号线':'10',
+  '11号线':'11','12号线':'12','13号线':'13','14号线':'14','15号线':'15',
+  '16号线':'16','17号线':'17','18号线':'18','19号线':'19',
+  '房山线':'FS','亦庄线':'YZ','燕房线':'YF','昌平线':'CP',
+  'S1线':'S1','西郊线':'XJ','亦庄T1线':'YT','首都机场线':'PK','大兴机场线':'PX'
+};
+// Build direction prefix map from LINES data: false→0, true→1
+const DIR_PREFIX={};
+LINES.forEach(line=>{
+  if(!line.directions)return;
+  line.directions.forEach(d=>{
+    const key=line.name+'|'+d.key;
+    DIR_PREFIX[key]=d.reversed?'1':'0';
+  });
+});
+function makeTrainId(lineName,dirKey,trainIdx){
+  const code=LINE_CODES[lineName]||('??');
+  const prefix=DIR_PREFIX[lineName+'|'+dirKey]||'0';
+  return code+prefix+String(trainIdx).padStart(3,'0');
+}
 
 function getDateGroup(d){
   const day=d.getDay();
@@ -251,7 +322,7 @@ function getActiveTrains(line,dtime){
           const fi=line.stIdx[prevSt],ti2=line.stIdx[curSt];
           if(fi!==undefined&&ti2!==undefined){
             out.push({
-              id:line.name+'_'+dk+'_'+trainIdx,
+              id:makeTrainId(line.name,dk,trainIdx),
               fi,ti:ti2,pr,
               dir:dk,
               from:prevSt,to:curSt,
@@ -281,13 +352,20 @@ function getActiveTrains(line,dtime){
             const pr=durSec>0?elapsedSec/durSec:0;
             const fi=line.stIdx[prevSt],ti2=line.stIdx[orderedNames[0]];
             if(fi!==undefined&&ti2!==undefined){
+              // Build path along the line direction for correct multi-segment interpolation
+              const path=[];
+              for(let p=0;p<orderedNames.length;p++){
+                const idx=line.stIdx[orderedNames[p]];
+                if(idx!==undefined)path.push(idx);
+              }
               out.push({
-                id:line.name+'_'+dk+'_'+trainIdx+'_L',
+                id:makeTrainId(line.name,dk,trainIdx),
                 fi,ti:ti2,pr,
                 dir:dk,
                 from:prevSt,to:orderedNames[0],
                 dep:fmtM(prevMin),arr:fmtM(nextLoop),
-                lineName:line.name,lineColor:line.color
+                lineName:line.name,lineColor:line.color,
+                path
               });
               found=true;
             }
@@ -305,6 +383,31 @@ function getActiveTrains(line,dtime){
 function interp(train,line){
   const f=line.stations[train.fi],t=line.stations[train.ti];
   if(!f||!t)return null;
+  // If train has a path (loop return segment), interpolate along all intermediate stations
+  if(train.path&&train.path.length>1){
+    // Build cumulative distances along the path
+    let totalDist=0;
+    const segs=[];
+    for(let i=1;i<train.path.length;i++){
+      const a=line.stations[train.path[i-1]],b=line.stations[train.path[i]];
+      if(!a||!b)continue;
+      const dx=b.lng-a.lng,dy=b.lat-a.lat;
+      const d=Math.sqrt(dx*dx+dy*dy);
+      segs.push({i,dist:totalDist,from:a,to:b,dx,dy});
+      totalDist+=d;
+    }
+    const targetDist=train.pr*totalDist;
+    // Find which segment the target falls in
+    for(let i=segs.length-1;i>=0;i--){
+      if(targetDist>=segs[i].dist){
+        const seg=segs[i];
+        const segPr=seg.d>0?(targetDist-seg.dist)/seg.d:0;
+        return{lng:seg.from.lng+seg.dx*segPr,lat:seg.from.lat+seg.dy*segPr};
+      }
+    }
+    const last=line.stations[train.path[train.path.length-1]];
+    return{lng:last.lng,lat:last.lat};
+  }
   return{lng:f.lng+(t.lng-f.lng)*train.pr,lat:f.lat+(t.lat-f.lat)*train.pr};
 }
 
@@ -373,6 +476,11 @@ LINES.forEach((line,li)=>{
 // Draw lines and stations
 const drawnStations=new Set();
 const linePolylines=[];
+const stationMarkers={};
+let activePopup=null;
+
+// Highlight mode
+let highlightedLine=-1;
 
 LINES.forEach((line,li)=>{
   const coords=line.stations.filter(s=>s.lng!==null).map(s=>[s.lat,s.lng]);
@@ -383,7 +491,7 @@ LINES.forEach((line,li)=>{
 
   const mainOpts={color:line.color,weight:5,opacity:0.9};
   const main=L.polyline(coords,mainOpts).addTo(map);
-  linePolylines.push({main});
+  linePolylines.push({main,li});
 
   // Stations
   line.stations.forEach((st,idx)=>{
@@ -393,19 +501,20 @@ LINES.forEach((line,li)=>{
 
     const info=stationLines[k];
     const isTransfer=info&&info.lines.length>1;
-    const isTerm=idx===0||idx===line.stations.length-1;
 
     let iconHtml,iconSize;
     if(isTransfer){
-      // Beijing subway standard transfer icon: larger white circle + dark border + cross pattern
-      iconSize=18;
-      iconHtml='<svg viewBox="0 0 20 20" width="18" height="18">'
-        +'<circle cx="10" cy="10" r="8.5" fill="#fff" stroke="#222" stroke-width="2"/>'
-        +'<line x1="10" y1="3.5" x2="10" y2="16.5" stroke="#222" stroke-width="1.2"/>'
-        +'<line x1="3.5" y1="10" x2="16.5" y2="10" stroke="#222" stroke-width="1.2"/>'
+      // Transfer icon: circle with two semicircle arrows, fills 15×15
+      iconSize=15;
+      iconHtml='<svg class="st-transfer-icon" viewBox="0 0 30 30">'
+        +'<circle cx="15" cy="15" r="13" fill="#fff" stroke="#333" stroke-width="2.2"/>'
+        +'<path d="M9,11.5 A8,8 0 0,1 21,11.5" fill="none" stroke="#333" stroke-width="1.8" stroke-linecap="round"/>'
+        +'<path d="M21,18.5 A8,8 0 0,1 9,18.5" fill="none" stroke="#333" stroke-width="1.8" stroke-linecap="round"/>'
+        +'<polygon points="21,9 23.2,13.2 18.8,13.2" fill="#333"/>'
+        +'<polygon points="9,21 6.8,16.8 11.2,16.8" fill="#333"/>'
         +'</svg>';
     }else{
-      iconSize=14;
+      iconSize=15;
       iconHtml='<div class="st-dot" style="--lc:'+line.color+'"></div>';
     }
     const icon=L.divIcon({
@@ -414,6 +523,7 @@ LINES.forEach((line,li)=>{
       iconSize:[iconSize,iconSize],iconAnchor:[iconSize/2,iconSize/2]
     });
     const marker=L.marker([st.lat,st.lng],{icon,interactive:true,zIndexOffset:isTransfer?500:100}).addTo(map);
+    stationMarkers[k]=marker;
 
     // Tooltip with station name + all lines
     let tipHtml='<b>'+st.name+'</b>';
@@ -424,17 +534,102 @@ LINES.forEach((line,li)=>{
       });
       tipHtml+='</div>';
     }
-    marker.bindTooltip(tipHtml,{className:'st-tip',direction:'top',offset:[0,-10]});
+    marker.bindTooltip(tipHtml,{className:'st-tip',direction:'top',offset:[0,-8]});
+
+    // Click → persistent popup
+    marker.on('click',function(){
+      closeActivePopup();
+      const lines=info?info.lines:[li];
+      let html='<div class="popup-card" style="position:relative">';
+      html+='<span class="popup-close" onclick="closeActivePopup()">&times;</span>';
+      html+='<div class="popup-title">'+st.name+'</div>';
+      // Lines with color + name
+      html+='<div class="popup-lines">';
+      lines.forEach(lidx=>{
+        const ln=LINES[lidx];
+        html+='<span class="popup-line-tag" style="background:'+ln.color+'22;color:'+ln.color+';border:1px solid '+ln.color+'44">'
+          +'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+ln.color+'"></span>'
+          +ln.name+'</span>';
+      });
+      html+='</div>';
+      // Address: show coordinates
+      html+='<div class="popup-addr">📍 '+st.lat.toFixed(6)+'°N, '+st.lng.toFixed(6)+'°E</div>';
+      html+='</div>';
+      activePopup=L.popup({closeButton:false,className:'popup-card',maxWidth:300,minWidth:220,offset:[0,-8]})
+        .setLatLng([st.lat,st.lng]).setContent(html).openOn(map);
+    });
   });
+
+  // Station icon size scales with map zoom: 8px at zoom 11 → 15px at zoom 14
+  function updateStationScale(){
+    const z=map.getZoom();
+    const scale=Math.max(0.35,0.155*(z-6.8));
+    document.documentElement.style.setProperty('--station-scale',scale.toFixed(2));
+  }
+  map.on('zoom',updateStationScale);
+  updateStationScale();
+});
+
+function closeActivePopup(){
+  if(activePopup){map.closePopup(activePopup);activePopup=null;}
+}
+
+function highlightLine(li){
+  // Toggle: if already highlighted, un-highlight
+  if(highlightedLine===li){unhighlightAll();return;}
+  highlightedLine=li;
+  // Dim all polylines except selected
+  linePolylines.forEach(({main,li:idx})=>{
+    if(idx===li){main.setStyle({opacity:0.9});}
+    else{main.setStyle({opacity:0.08});}
+  });
+  // Hide other lines' trains, show only selected line's trains
+  allTrains.forEach(({train:t,li:idx})=>{
+    const m=trainMarkers[t.id];
+    if(!m)return;
+    m.setOpacity(idx===li?1:0);
+  });
+  // Hide stations not on selected line
+  Object.keys(stationMarkers).forEach(k=>{
+    const info=stationLines[k];
+    stationMarkers[k].setOpacity(!info||info.lines.includes(li)?1:0);
+  });
+  // Update legend chips
+  document.querySelectorAll('.line-chip').forEach((chip,i)=>{
+    if(i===li){chip.classList.add('highlighted');chip.style.opacity='';}
+    else{chip.classList.remove('highlighted');chip.style.opacity='0.3';}
+  });
+}
+
+function unhighlightAll(){
+  highlightedLine=-1;
+  linePolylines.forEach(({main})=>{main.setStyle({opacity:0.9});});
+  // Restore all trains
+  allTrains.forEach(({train:t})=>{
+    const m=trainMarkers[t.id];
+    if(!m)return;
+    m.setOpacity(1);
+  });
+  // Restore all stations
+  Object.values(stationMarkers).forEach(m=>{m.setOpacity(1);});
+  // Restore legend chips
+  document.querySelectorAll('.line-chip').forEach(chip=>{chip.classList.remove('highlighted');chip.style.opacity='';});
+}
+
+// Click map to dismiss popup & unhighlight
+map.on('click',function(e){
+  // Only if clicking on map background (not on a marker)
+  if(!e.originalEvent._clickedMarker){closeActivePopup();unhighlightAll();}
 });
 
 // ═══════════════════════════════════════════════════════════
 // TRAIN LAYER
 // ═══════════════════════════════════════════════════════════
 let trainMarkers={};
+let allTrains=[];
 
 function updateTrains(){
-  const allTrains=[];
+  allTrains=[];
   const lineDirCounts={}; // li -> {dirKey: count, _total: count}
   const dtime=simTime||new Date();
 
@@ -446,23 +641,46 @@ function updateTrains(){
       if(!lineDirCounts[li][t.dir])lineDirCounts[li][t.dir]=0;
       lineDirCounts[li][t.dir]++;
     });
-    trains.forEach(t=>allTrains.push({train:t,line}));
+    trains.forEach(t=>allTrains.push({train:t,line,li}));
   });
 
   const curKeys=new Set(allTrains.map(t=>t.train.id));
 
+  // Debug: detect ID collisions
+  const idList=allTrains.map(t=>t.train.id);
+  const seenIds=new Set();
+  for(const id of idList){
+    if(seenIds.has(id)){
+      console.warn('[BUG] Duplicate train ID:',id,'in allTrains at minute',dtime.getHours()+':'+dtime.getMinutes());
+    }
+    seenIds.add(id);
+  }
+  // Debug: detect marker reuse
+  const markerKeys=Object.keys(trainMarkers);
+  for(const id of idList){
+    if(!trainMarkers[id]&&markerKeys.length>0){
+      // new train appearing
+    }
+  }
+
   // Remove old
+  const removed=[];
   for(const k of Object.keys(trainMarkers)){
-    if(!curKeys.has(k)){map.removeLayer(trainMarkers[k]);delete trainMarkers[k];}
+    if(!curKeys.has(k)){removed.push(k);map.removeLayer(trainMarkers[k]);delete trainMarkers[k];}
+  }
+  if(removed.length>0){
+    const dtimeStr=dtime.getHours()+':'+String(dtime.getMinutes()).padStart(2,'0')+':'+String(dtime.getSeconds()).padStart(2,'0');
+    console.log('[TrainUpdate] '+dtimeStr+' removed:',removed.join(','),'active:',idList.length);
   }
 
   // Add/update
-  allTrains.forEach(({train:t,line})=>{
+  allTrains.forEach(({train:t,line,li})=>{
     const pos=interp(t,line);
     if(!pos)return;
 
     const from=line.stations[t.fi],to=line.stations[t.ti];
     const bearing=from&&to?getBearing(from,to):0;
+    const isDimmed=highlightedLine>=0&&li!==highlightedLine;
 
     if(trainMarkers[t.id]){
       const m=trainMarkers[t.id];
@@ -471,14 +689,36 @@ function updateTrains(){
     }else{
       const m=L.marker([pos.lat,pos.lng],{icon:makeTrainIcon(line.color,bearing)}).addTo(map);
       m.bindTooltip(
+        '<div class="tt-no">车辆编号：'+t.id+'</div>'+
         '<div class="tt-dir">'+t.dir+'</div>'+
         '<div class="tt-st">'+t.from+' ➜ '+t.to+'</div>'+
         '<div class="tt-tm">到站 '+t.arr+'</div>'+
         '<div class="tt-line" style="background:'+line.color+'22;color:'+line.color+'">'+t.lineName+'</div>',
         {className:'tt',direction:'top',offset:[0,-10]}
       );
+      // Click → persistent popup
+      m.on('click',function(e){
+        L.DomEvent.stopPropagation(e);
+        L.DomEvent.preventDefault(e);
+        e.originalEvent._clickedMarker=true;
+        closeActivePopup();
+        const html='<div class="popup-card" style="position:relative">'
+          +'<span class="popup-close" onclick="closeActivePopup()">&times;</span>'
+          +'<div class="train-no">车辆编号：'+t.id+'</div>'
+          +'<div class="popup-title">'+t.lineName+'</div>'
+          +'<div class="popup-row"><b>方向：</b>'+t.dir+'</div>'
+          +'<div class="popup-row"><b>区间：</b>'+t.from+' ➜ '+t.to+'</div>'
+          +'<div class="popup-row"><b>发车：</b>'+t.dep+'</div>'
+          +'<div class="popup-row"><b>到站：</b>'+t.arr+'</div>'
+          +'<div class="popup-line-tag" style="background:'+line.color+'22;color:'+line.color+';border:1px solid '+line.color+'44;margin-top:6px">'+line.name+'</div>'
+          +'</div>';
+        activePopup=L.popup({closeButton:false,className:'popup-card',maxWidth:300,offset:[0,-10]})
+          .setLatLng([pos.lat,pos.lng]).setContent(html).openOn(map);
+      });
       trainMarkers[t.id]=m;
     }
+    if(isDimmed)trainMarkers[t.id].setOpacity(0);
+    else trainMarkers[t.id].setOpacity(1);
   });
 
   // Update stats
@@ -492,17 +732,25 @@ function updateTrains(){
     const dc=lineDirCounts[li];
     const total=dc?dc._total:0;
     const off=lineVisible[li]?'':'off';
-    // Build direction breakdown: "东行 5 | 西行 3"
+    // Build direction breakdown: "→ XX站 5 | ← XX站 3"
     let dirHtml='';
     if(dc&&line.directions){
       const parts=[];
       line.directions.forEach(d=>{
         const cnt=dc[d.key]||0;
-        parts.push('<b>'+cnt+'</b> '+d.key);
+        if(line.loop){
+          // Loop lines: keep 内环/外环
+          parts.push('<b>'+cnt+'</b> '+d.key);
+        }else{
+          // Non-loop: show terminal station name
+          let stNames=line.stations.map(s=>s.name);
+          let terminal=d.reversed?stNames[0]:stNames[stNames.length-1];
+          parts.push('<b>'+cnt+'</b> →'+terminal);
+        }
       });
       dirHtml=parts.join(' &middot; ');
     }
-    html+='<div class="line-chip '+off+'" onclick="toggleLine('+li+')">'
+    html+='<div class="line-chip '+off+'" onclick="highlightLine('+li+')" ondblclick="event.stopPropagation();toggleLine('+li+')">'
       +'<span class="cdot" style="background:'+line.color+'"></span>'
       +'<span class="cname">'+line.name+'</span>'
       +'<span class="cdir">'+dirHtml+'</span>'
@@ -574,13 +822,21 @@ function tick(){
     updateTrains();
   }else{
     // Same minute: just reposition existing trains (smooth interpolation)
-    const allTrains=[];
+    allTrains=[];
     LINES.forEach((line,li)=>{
       if(!lineVisible[li])return;
       const trains=getActiveTrains(line,dtime);
-      trains.forEach(t=>allTrains.push({train:t,line}));
+      trains.forEach(t=>allTrains.push({train:t,line,li}));
     });
     // Only reposition, don't add/remove markers
+    const smoothIds=allTrains.map(t=>t.train.id);
+    // Debug: check if any marker is orphaned (exists but not in allTrains)
+    const smoothKeys=Object.keys(trainMarkers);
+    for(const mk of smoothKeys){
+      if(!smoothIds.includes(mk)){
+        console.warn('[Smooth] Orphan marker:',mk,'not in allTrains. active:',smoothIds.length,'markers:',smoothKeys.length);
+      }
+    }
     allTrains.forEach(({train:t,line})=>{
       const m=trainMarkers[t.id];
       if(!m)return;

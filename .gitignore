@@ -7,3 +7,13 @@ Thumbs.db
 node_modules/
 *.docx
 scripts/gen_doc.js
+scripts/gen_doc_v2.js
+scripts/gen_doc_v3.js
+scripts/gen_doc_v4.js
+scripts/build_v4.js
+scripts/build_v4.py
+scripts/_dirs_output.txt
+debug_train*.py
+doc_assets/
+package.json
+package-lock.json
