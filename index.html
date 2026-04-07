@@ -300,6 +300,8 @@ function getActiveTrains(line,dtime){
       const effectiveTm=tm<360?tmNext:tm;
 
       let prevSt=firstSt,prevMin=depM,found=false;
+      // Track this train's actual segment travel times for loop-closing estimation
+      let segTimesArr=[],segTimeSum=0;
       for(let si=1;si<orderedNames.length;si++){
         const curSt=orderedNames[si];
         const curTimes=schDir[dg][curSt];
@@ -313,6 +315,10 @@ function getActiveTrains(line,dtime){
           else{lo=mid+1;}
         }
         if(arrMin<0)break;
+
+        const segDur=arrMin-prevMin;
+        segTimesArr.push(segDur);
+        segTimeSum+=segDur;
 
         if(effectiveTm>=prevMin&&effectiveTm<arrMin){
           // Sub-minute smooth interpolation using seconds
@@ -338,37 +344,8 @@ function getActiveTrains(line,dtime){
 
       // Loop line: check if train is on the closing segment (last station → first station)
       if(!found&&line.loop&&orderedNames.length>1){
-        // Calculate loop-closing arrival time: last station arrival + estimated travel time
-        // Use the average segment time of the last 3 segments as estimate
-        const lastStIdx=orderedNames.length-1;
-        const segTimes=[];
-        for(let si=Math.max(1,lastStIdx-3);si<=lastStIdx;si++){
-          const fromSt=orderedNames[si-1],toSt=orderedNames[si];
-          const fromT=schDir[dg][fromSt],toT=schDir[dg][toSt];
-          if(fromT&&toT){
-            // Find matching times for this train: earliest toT > prevMin at departure
-            let lo2=0,hi2=toT.length-1,arr2=-1;
-            while(lo2<=hi2){const mid=(lo2+hi2)>>1;if(toT[mid]>prevMin){arr2=toT[mid];hi2=mid-1;}else{lo2=mid+1;}}
-            // Use average inter-station time from this train's own schedule
-          }
-        }
-        // Simpler: estimate loop closing time as average of last 3 segment durations
-        let totalSegTime=0,segCount=0;
-        const last3From=orderedNames[Math.max(0,lastStIdx-3)];
-        const last3Times=schDir[dg][last3From];
-        if(last3Times){
-          for(let k=Math.max(0,last3Times.length-3);k<last3Times.length;k++){
-            const fromMin=last3Times[k];
-            const nextSt=orderedNames[orderedNames.indexOf(last3From)+1];
-            if(!nextSt)continue;
-            const nextTimes=schDir[dg][nextSt];
-            if(!nextTimes)continue;
-            let lo3=0,hi3=nextTimes.length-1,nextMin=-1;
-            while(lo3<=hi3){const mid=(lo3+hi3)>>1;if(nextTimes[mid]>fromMin){nextMin=nextTimes[mid];hi3=mid-1;}else{lo3=mid+1;}}
-            if(nextMin>0){totalSegTime+=(nextMin-fromMin);segCount++;}
-          }
-        }
-        const avgSegTime=segCount>0?Math.round(totalSegTime/segCount):3;
+        // Estimate loop-closing travel time from this train's actual average segment time
+        const avgSegTime=segTimesArr.length>0?Math.round(segTimeSum/segTimesArr.length):3;
         const nextLoop=prevMin+avgSegTime;
 
         if(effectiveTm>=prevMin&&effectiveTm<nextLoop){
