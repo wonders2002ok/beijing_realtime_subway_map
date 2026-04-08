@@ -40,6 +40,44 @@
 - **环线支持**：2 号线、10 号线环线列车可循环运行。
 - **昼夜切换**：根据时间自动切换高德标准地图（白天）与卫星影像底图（夜晚）。
 
+## 数据来源与外部依赖
+
+### [Beijing-Subway-Tools](https://github.com/Mick235711/Beijing-Subway-Tools)
+
+核心时刻表数据来源于 [Beijing-Subway-Tools](https://github.com/Mick235711/Beijing-Subway-Tools)（MIT License），包含：
+- JSON5 格式时刻表（使用 delta 压缩编码）。
+- 多交路支持（全程车 / 快车 / 库车等）。
+- 工作日 / 双休日的分组调度。
+
+**注意**：本仓库不直接包含时刻表原始数据。构建时需要确保 `Beijing-Subway-Tools` 已克隆到本仓库的同级目录：
+`../Beijing-Subway-Tools/data/beijing/`
+
+## 地图服务
+
+项目使用 [高德地图](https://www.amap.com/) 提供的瓦片服务，基于 **GCJ-02** 坐标系：
+- **白天模式**：矢量标准地图（style=7）。
+- **夜晚模式**：卫星影像底图（style=6），并附加亮度降级滤镜。
+- **站点坐标**：采集自高德地图搜索 API，确保与底层瓦片地图完全对齐。
+
+## 构建方式
+
+如果需要重新生成 `js/data.js` 或 `index.html`，请按以下步骤操作：
+
+1. **环境准备**：
+   ```bash
+   pip install pyjson5
+   ```
+
+2. **同步时刻表数据**（建议将数据仓库克隆在本项目同级目录）：
+   ```bash
+   git clone https://github.com/Mick235711/Beijing-Subway-Tools.git ../Beijing-Subway-Tools
+   ```
+
+3. **运行构建脚本**：
+   ```bash
+   python scripts/build.py
+   ```
+
 ## 项目结构
 
 ```
@@ -48,14 +86,14 @@ beijing-subway/
 │   └── style.css
 ├── js/                  # 脚本目录
 │   ├── app.js           # 主应用逻辑
-│   ├── data.js          # 构建生成的时刻表数据
+│   ├── data.js          # 构建生成的时刻表数据（Git 已跟踪）
 │   └── data.template.js # 数据注入模板
-├── data/                # 原始地理数据
+├── data/                # 静态地理数据（站点坐标等）
 │   └── amap_beijing.json
-├── scripts/             # 构建脚本
+├── scripts/             # 工具与构建脚本
 │   └── build.py         # 主构建脚本
-├── template.html        # HTML 模板
-├── index.html           # 最终入口
+├── template.html        # HTML 模板（结构定义）
+├── index.html           # 最终入口文件
 ├── README.md
 └── .gitignore
 ```
