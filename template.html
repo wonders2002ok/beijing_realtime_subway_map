@@ -526,17 +526,23 @@ function interpAlongPath(pts, pr){
 function interp(train,line){
   const f=line.stations[train.fi],t=line.stations[train.ti];
   if(!f||!t)return null;
+  // Helper: look up curved segment, handling both directions
+  function getSegPts(segMap, a, b){
+    if(!segMap) return null;
+    const fwd=segMap[a+'_'+b];
+    if(fwd&&fwd.length>=2) return fwd;
+    const rev=segMap[b+'_'+a];
+    if(rev&&rev.length>=2) return [...rev].reverse();
+    return null;
+  }
   // If train has a path (loop return segment), interpolate along all intermediate stations
   if(train.path&&train.path.length>1){
-    // Gather curved sub-segments for the multi-station path
     const allPts=[];
     const li=LINES.indexOf(line);
     const segMap=curvedSegments[li];
     for(let i=1;i<train.path.length;i++){
-      const key=train.path[i-1]+'_'+train.path[i];
-      const seg=segMap&&segMap[key];
-      if(seg&&seg.length>=2){
-        // Avoid duplicating the junction point
+      const seg=getSegPts(segMap, train.path[i-1], train.path[i]);
+      if(seg){
         if(allPts.length>0) allPts.push(...seg.slice(1));
         else allPts.push(...seg);
       } else {
@@ -550,12 +556,11 @@ function interp(train,line){
     const last=line.stations[train.path[train.path.length-1]];
     return{lng:last.lng,lat:last.lat};
   }
-  // Use curved segment if available
+  // Use curved segment if available (handles both forward & reversed directions)
   const li=LINES.indexOf(line);
   const segMap=curvedSegments[li];
-  const key=train.fi+'_'+train.ti;
-  const seg=segMap&&segMap[key];
-  if(seg&&seg.length>=2) return interpAlongPath(seg, train.pr);
+  const seg=getSegPts(segMap, train.fi, train.ti);
+  if(seg) return interpAlongPath(seg, train.pr);
   // Fallback: straight line
   return{lng:f.lng+(t.lng-f.lng)*train.pr,lat:f.lat+(t.lat-f.lat)*train.pr};
 }
@@ -646,7 +651,7 @@ LINES.forEach((line,li)=>{
   try {
     if (coords.length > 2) {
       const lineString = turf.lineString(coords.map(c=>[c[1], c[0]]));
-      const curved = turf.bezierSpline(lineString, {resolution: 10000, sharpness: 0.85});
+      const curved = turf.bezierSpline(lineString, {resolution: 10000, sharpness: 0.5});
       renderCoords = curved.geometry.coordinates.map(c=>[c[1], c[0]]);
     }
   } catch(e) {}
