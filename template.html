@@ -6,6 +6,7 @@
 <title>北京地铁 · 全网实时模拟</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans SC",sans-serif;background:#080c14;color:#e0e0e0;overflow:hidden}
@@ -155,7 +156,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
 }
 .st-label.terminal{font-weight:700;color:#fff;font-size:9px}
 
-.train-marker{background:none!important;border:none!important}
+.train-marker{background:none!important;border:none!important;transition:transform 1s linear;}
 /* Train fade in/out for smoother appearance */
 .train-marker .leaflet-marker-icon{
   opacity:0;
@@ -203,16 +204,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
 
   <div class="line-filter" id="lineFilter"></div>
 
-  <div class="controls">
-    <button id="btnRT" class="active" onclick="setMode('rt')">实时</button>
-    <button id="btnPeak" onclick="setMode('peak')">早高峰</button>
-    <button id="btnOP" onclick="setMode('op')">平峰</button>
-    <button id="btnEve" onclick="setMode('eve')">晚高峰</button>
+  <div class="speed-ctrl" style="margin-bottom:6px">
+    <label>时间</label>
+    <input type="range" id="timeSlider" min="0" max="86400" value="0" step="1" oninput="scrubTime(this.value)" onchange="scrubTime(this.value)"/>
+  </div>
+  <div class="controls" style="margin-bottom:6px">
+    <button id="btnPlay" onclick="togglePlay()" style="background:rgba(99,102,241,0.2);color:#fff">⏸ 暂停</button>
+    <button id="btnRT" onclick="resetRealtime()">自动流逝 (回到实时)</button>
   </div>
   <div class="speed-ctrl">
-    <label>速度</label>
-    <input type="range" id="spdSlider" min="1" max="300" value="1" oninput="setSpd(this.value)"/>
-    <span class="sv" id="spdVal">1×</span>
+    <label style="min-width:auto">倍速</label>
+    <select id="spdSelect" onchange="setSpd(this.value)" style="flex:1;background:rgba(255,255,255,0.06);color:#ccc;border:1px solid rgba(255,255,255,0.1);border-radius:4px;font-size:11px;padding:3px;outline:none;">
+      <option value="1">1x (真实时间)</option>
+      <option value="10">10x (微加速)</option>
+      <option value="30">30x (半分钟/秒)</option>
+      <option value="60">60x (1分钟/秒)</option>
+      <option value="300">300x (5分钟/秒)</option>
+    </select>
   </div>
 </div>
 
@@ -240,7 +248,38 @@ LINES.forEach((_,i)=>{lineVisible[i]=true;});
 // ═══════════════════════════════════════════════════════════
 // SIMULATION ENGINE
 // ═══════════════════════════════════════════════════════════
-let simTime=null,speed=1,mode='rt',lastTick=Date.now(),lastMinute=-1;
+let simMode = 'rt'; // 'rt', 'sim'
+let isPlaying = true;
+let simTimeMs = Date.now();
+let speedMultiplier = 1;
+let lastEpoch = Date.now();
+
+function resetRealtime() {
+  simMode = 'rt';
+  isPlaying = true;
+  speedMultiplier = 1;
+  document.getElementById('spdSelect').value = "1";
+  document.getElementById('btnPlay').innerHTML = '⏸ 暂停';
+  document.getElementById('modeLbl').innerText = '当前模式: 实时同步流逝';
+  updateTrains(true);
+}
+function togglePlay() {
+  if(simMode === 'rt') simMode = 'sim';
+  isPlaying = !isPlaying;
+  document.getElementById('btnPlay').innerHTML = isPlaying ? '⏸ 暂停' : '▶ 播放';
+  document.getElementById('modeLbl').innerText = '当前模式: 脱机模拟';
+  updateTrains(true);
+}
+function scrubTime(val) {
+  simMode = 'sim';
+  isPlaying = false;
+  document.getElementById('btnPlay').innerHTML = '▶ 播放';
+  const now = new Date();
+  now.setHours(Math.floor(val/3600), Math.floor((val%3600)/60), Math.floor(val%60), 0);
+  simTimeMs = now.getTime();
+  document.getElementById('modeLbl').innerText = '当前模式: 脱机模拟';
+  updateTrains(true);
+}
 
 // Train number code mapping
 const LINE_CODES={
@@ -526,8 +565,16 @@ LINES.forEach((line,li)=>{
   // Close loop by appending first station's coordinate to the end
   if(line.loop){coords.push(coords[0]);}
 
-  const mainOpts={color:line.color,weight:5,opacity:0.9};
-  const main=L.polyline(coords,mainOpts).addTo(map);
+  let renderCoords = coords;
+  try {
+    if (coords.length > 2) {
+      const lineString = turf.lineString(coords.map(c=>[c[1], c[0]]));
+      const curved = turf.bezierSpline(lineString, {resolution: 10000, sharpness: 0.85});
+      renderCoords = curved.geometry.coordinates.map(c=>[c[1], c[0]]);
+    }
+  } catch(e) {}
+  const mainOpts={color:line.color,weight:5,opacity:1.0,lineJoin:'round'};
+  const main=L.polyline(renderCoords,mainOpts).addTo(map);
   linePolylines.push({main,li});
 
   // Stations
@@ -660,12 +707,13 @@ map.on('click',function(e){
 // ═══════════════════════════════════════════════════════════
 let trainMarkers={};
 
-function updateTrains(){
+function updateTrains(forced=false){
   const allTrains=[];
   const lineDirCounts={}; // li -> {dirKey: count, _total: count}
   const dtime=simTime||new Date();
 
   LINES.forEach((line,li)=>{
+    if (!lineVisible[li]) return; // Skip invisible lines directly
     if(!lineVisible[li])return;
     const trains=getActiveTrains(line,dtime);
     lineDirCounts[li]={'_total':trains.length};
@@ -770,6 +818,7 @@ function updateTrains(){
   // Update line list
   let html='';
   LINES.forEach((line,li)=>{
+    if (!lineVisible[li]) return; // Skip invisible lines directly
     const dc=lineDirCounts[li];
     const total=dc?dc._total:0;
     const off=lineVisible[li]?'':'off';
@@ -829,21 +878,14 @@ function updateClock(){
 // ═══════════════════════════════════════════════════════════
 // MODES
 // ═══════════════════════════════════════════════════════════
-function setMode(m){
-  mode=m;
-  document.querySelectorAll('.controls button').forEach(b=>b.classList.remove('active'));
-  const d=new Date();
-  if(m==='rt'){simTime=null;speed=1;document.getElementById('btnRT').classList.add('active');document.getElementById('spdSlider').value=1;document.getElementById('spdVal').textContent='1×';document.getElementById('modeLbl').textContent='实时模式';}
+
   else if(m==='peak'){simTime=new Date(d.getFullYear(),d.getMonth(),d.getDate(),8,0,0);speed=60;document.getElementById('btnPeak').classList.add('active');document.getElementById('spdSlider').value=60;document.getElementById('spdVal').textContent='60×';document.getElementById('modeLbl').textContent='早高峰 08:00';}
   else if(m==='op'){simTime=new Date(d.getFullYear(),d.getMonth(),d.getDate(),13,0,0);speed=60;document.getElementById('btnOP').classList.add('active');document.getElementById('spdSlider').value=60;document.getElementById('spdVal').textContent='60×';document.getElementById('modeLbl').textContent='平峰 13:00';}
   else if(m==='eve'){simTime=new Date(d.getFullYear(),d.getMonth(),d.getDate(),18,0,0);speed=60;document.getElementById('btnEve').classList.add('active');document.getElementById('spdSlider').value=60;document.getElementById('spdVal').textContent='60×';document.getElementById('modeLbl').textContent='晚高峰 18:00';}
   // Clear existing train markers
   Object.keys(trainMarkers).forEach(k=>{map.removeLayer(trainMarkers[k]);delete trainMarkers[k];});
 }
-function setSpd(v){
-  speed=parseInt(v);
-  document.getElementById('spdVal').textContent=v+'×';
-  if(mode==='rt'&&v>1){simTime=new Date();mode='sim';document.querySelectorAll('.controls button').forEach(b=>b.classList.remove('active'));document.getElementById('modeLbl').textContent=v+'× 快进';}
+
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -868,6 +910,7 @@ function tick(){
     // Build fresh train list per line for accurate seconds-based pr
     const dtime2=simTime||new Date();
     LINES.forEach((line,li)=>{
+    if (!lineVisible[li]) return; // Skip invisible lines directly
       if(!lineVisible[li])return;
       const trains=getActiveTrains(line,dtime2);
       trains.forEach(t=>{
