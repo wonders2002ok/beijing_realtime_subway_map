@@ -380,7 +380,7 @@ function getActiveTrains(line,dtime){
           const fi=line.stIdx[prevSt],ti2=line.stIdx[orderedNames[0]];
           if(fi!==undefined&&ti2!==undefined){
             out.push({
-              id:makeTrainId(line.name,dk,trainIdx)+'L',
+              id:makeTrainId(line.name,dk,trainIdx),
               fi,ti:ti2,pr,
               dir:dk,
               from:prevSt,to:orderedNames[0],
