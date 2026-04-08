@@ -156,6 +156,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
 .st-label.terminal{font-weight:700;color:#fff;font-size:9px}
 
 .train-marker{background:none!important;border:none!important}
+/* Train fade in/out for smoother appearance */
+.train-marker .leaflet-marker-icon{
+  opacity:0;
+  animation:trainFadeIn 0.5s ease forwards;
+}
+@keyframes trainFadeIn{
+  from{opacity:0;transform:scale(0.5)}
+  to{opacity:1;transform:scale(1)}
+}
 
 /* Station icon zoom-dependent scaling — all station markers use --station-scale */
 .line-layer-hidden .st-dot{opacity:.15!important}
@@ -281,23 +290,36 @@ function getActiveTrains(line,dtime){
     const depTimes=schDir[dg][firstSt];
     if(!depTimes||!depTimes.length)continue;
 
+    // Determine if we're in late-night mode (trains from yesterday still running)
+    const isLateNight=tm<360; // before 06:00
+    // Find the latest departure that's "today" (before 06:00 means from yesterday)
+    // All late-night departures are those from yesterday — their minute values are > tm
+    // but we add 1440 to current time for comparison
+    const effectiveTm=isLateNight?tmNext:tm;
+
     let trainIdx=0;
     for(let di=0;di<depTimes.length;di++){
       const depM=depTimes[di];
-      // Optimization: in normal hours, skip early trains
-      if(tm>=360){
+      // Optimization: in normal hours, skip trains that haven't departed yet
+      if(!isLateNight){
         if(depM>tm+1)break; // times are sorted, no need to check further
         if(depM>tm)continue; // not departed yet
       }else{
-        // Late-night (before 06:00): only check last few trains (likely still running)
-        // Skip first N-6 departures; check last 6 to find late-night runners
-        if(di<depTimes.length-6)continue;
-        // In late-night mode, these last trains are assumed departed from yesterday
-        // Don't check depM > tm because depM is yesterday's time (e.g. 1413 for 23:33)
+        // Late-night: find trains from yesterday that are still en route
+        // A train from yesterday departed at depM (< 1440) and is still running if
+        // its estimated arrival at last station > tmNext
+        if(depM>tm&&depM<effectiveTm){
+          // This train departed earlier today (before midnight) — normal
+        }else if(depM<tm){
+          // This train departed yesterday — check if it could still be running
+          // Estimate max travel time: ~120 min for longest lines
+          const maxTravel=120;
+          if(depM+maxTravel<effectiveTm)continue; // definitely finished
+        }else{
+          // depM > effectiveTm: train hasn't departed yet (even from yesterday)
+          continue;
+        }
       }
-
-      // Use tmNext for late-night comparison so station times > 1440 match correctly
-      const effectiveTm=tm<360?tmNext:tm;
 
       let prevSt=firstSt,prevMin=depM,found=false;
       // Track this train's actual segment travel times for loop-closing estimation
@@ -613,6 +635,7 @@ function updateTrains(){
   const allTrains=[];
   const lineDirCounts={}; // li -> {dirKey: count, _total: count}
   const dtime=simTime||new Date();
+  cachedTrainList=null; // invalidate cache
 
   LINES.forEach((line,li)=>{
     if(!lineVisible[li])return;
@@ -645,6 +668,7 @@ function updateTrains(){
       const m=trainMarkers[t.id];
       m.setLatLng([pos.lat,pos.lng]);
       m.setIcon(makeTrainIcon(line.color,bearing));
+      m.setOpacity(isDimmed?0.15:1);
     }else{
       const m=L.marker([pos.lat,pos.lng],{icon:makeTrainIcon(line.color,bearing)}).addTo(map);
       m.bindTooltip(
@@ -674,11 +698,8 @@ function updateTrains(){
         activePopup=L.popup({closeButton:false,className:'popup-card',maxWidth:300,offset:[0,-10]})
           .setLatLng([pos.lat,pos.lng]).setContent(html).openOn(map);
       });
-      if(isDimmed)m.setOpacity(0.15);
+      m.setOpacity(isDimmed?0.15:1);
       trainMarkers[t.id]=m;
-    }else{
-      // Update opacity for existing marker
-      trainMarkers[t.id].setOpacity(isDimmed?0.15:1);
     }
   });
 
@@ -730,6 +751,8 @@ function toggleLine(li){
       map.removeLayer(pl.main);
     }
   }
+  cachedTrainList=null;
+  lastTrainMinute=-1; // force rebuild on next tick
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -758,6 +781,7 @@ function setMode(m){
   else if(m==='eve'){simTime=new Date(d.getFullYear(),d.getMonth(),d.getDate(),18,0,0);speed=60;document.getElementById('btnEve').classList.add('active');document.getElementById('spdSlider').value=60;document.getElementById('spdVal').textContent='60×';document.getElementById('modeLbl').textContent='晚高峰 18:00';}
   // Clear existing train markers
   Object.keys(trainMarkers).forEach(k=>{map.removeLayer(trainMarkers[k]);delete trainMarkers[k];});
+  cachedTrainList=null;
 }
 function setSpd(v){
   speed=parseInt(v);
@@ -769,6 +793,9 @@ function setSpd(v){
 // MAIN LOOP
 // ═══════════════════════════════════════════════════════════
 let frameCount=0,lastTrainMinute=-1;
+// Cache train list per line — rebuilt only when minute changes
+let cachedTrainList=null;
+
 function tick(){
   const now=Date.now(),dt=now-lastTick;lastTick=now;
   if(simTime&&speed>1)simTime=new Date(simTime.getTime()+dt*speed);
@@ -776,21 +803,37 @@ function tick(){
   const dtime=simTime||new Date();
   updateMapTheme(dtime);
   const curMin=dtime.getHours()*60+dtime.getMinutes();
-  // Update trains every frame for smooth animation
+
   if(curMin!==lastTrainMinute){
     // New minute: full recalculation (needed for new/departed trains)
     lastTrainMinute=curMin;
     updateTrains();
-  }else{
-    // Same minute: just reposition existing trains (smooth interpolation)
-    const allTrains=[];
-    LINES.forEach((line,li)=>{
-      if(!lineVisible[li])return;
-      const trains=getActiveTrains(line,dtime);
-      trains.forEach(t=>allTrains.push({train:t,line,li}));
+    // Cache the current train list for sub-minute interpolation
+    cachedTrainList=null; // will be rebuilt lazily
+  }
+
+  // Every frame: update positions using seconds-based interpolation
+  // For high-speed modes (speed>1), interpolate smoothly
+  if(speed>1||mode!=='rt'){
+    // Recalculate train positions with second precision
+    if(!cachedTrainList){
+      cachedTrainList=[];
+      LINES.forEach((line,li)=>{
+        if(!lineVisible[li])return;
+        const trains=getActiveTrains(line,dtime);
+        trains.forEach(t=>cachedTrainList.push({train:t,line,li}));
+      });
+    }
+    cachedTrainList.forEach(({train:t,line})=>{
+      const m=trainMarkers[t.id];
+      if(!m)return;
+      const pos=interp(t,line);
+      if(!pos)return;
+      m.setLatLng([pos.lat,pos.lng]);
     });
-    // Only reposition, don't add/remove markers
-    allTrains.forEach(({train:t,line})=>{
+  }else if(cachedTrainList){
+    // Real-time mode with cached data: just update positions
+    cachedTrainList.forEach(({train:t,line})=>{
       const m=trainMarkers[t.id];
       if(!m)return;
       const pos=interp(t,line);
@@ -798,6 +841,7 @@ function tick(){
       m.setLatLng([pos.lat,pos.lng]);
     });
   }
+
   requestAnimationFrame(tick);
 }
 tick();
