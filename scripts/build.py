@@ -88,6 +88,171 @@ def get_all_times(schedule_blocks):
             all_t.extend(expand_delta(block['first_train'], block.get('delta', [])))
     return all_t
 
+def time_to_min(t):
+    """Convert 'HH:MM' string to minutes since midnight."""
+    return int(t[:2]) * 60 + int(t[3:])
+
+def apply_filters(all_times, filters):
+    """
+    Given all departure times and a list of filters, return a set of indices
+    that belong to non-loop (回库车) trains.
+    
+    Each filter marks certain trains as belonging to a specific route plan.
+    Routes with {loop: false} or 'ends_with' mean the train terminates early.
+    
+    Returns: dict mapping route_plan_name -> set of time indices (into all_times).
+    """
+    route_indices = {}
+    for filt in filters:
+        plan = filt.get('plan', '')
+        route_data = filt.get('route_data', {})
+        
+        # Find matching train indices
+        indices = set()
+        
+        if 'trains' in filt and filt['trains']:
+            # Exact time list
+            for t_str in filt['trains']:
+                t_min = time_to_min(t_str)
+                for i, t in enumerate(all_times):
+                    if time_to_min(t) == t_min:
+                        indices.add(i)
+        
+        if 'first_train' in filt:
+            first_min = time_to_min(filt['first_train'])
+            start_idx = None
+            for i, t in enumerate(all_times):
+                if time_to_min(t) >= first_min:
+                    start_idx = i
+                    break
+            
+            if start_idx is not None:
+                if 'until' in filt:
+                    until_min = time_to_min(filt['until'])
+                    end_idx = start_idx
+                    for i in range(start_idx, len(all_times)):
+                        if time_to_min(all_times[i]) <= until_min:
+                            end_idx = i
+                        else:
+                            break
+                    # All trains from start_idx to end_idx
+                    candidates = list(range(start_idx, end_idx + 1))
+                    skip = filt.get('skip_trains', 0)
+                    count = filt.get('count', None)
+                    
+                    # Apply skip: take every (skip+1)-th train
+                    selected = candidates[skip::skip + 1] if skip > 0 else candidates
+                    if count:
+                        selected = selected[:count]
+                    indices.update(selected)
+                else:
+                    # first_train without until: single train or count from that point
+                    skip = filt.get('skip_trains', 0)
+                    count = filt.get('count', 1)
+                    candidates = list(range(start_idx, len(all_times)))
+                    selected = candidates[skip::skip + 1] if skip > 0 else candidates
+                    selected = selected[:count]
+                    indices.update(selected)
+        
+        if indices:
+            if plan not in route_indices:
+                route_indices[plan] = set()
+            route_indices[plan].update(indices)
+    
+    return route_indices
+
+def parse_train_endpoints(directions, train_routes, timetable, date_groups, first_station):
+    """
+    For loop lines, parse filters to determine which trains are non-loop (回库车).
+    
+    Returns: dict[dkey][mk] = list where index i = terminal station name or None (full loop).
+    """
+    if not train_routes:
+        return {}
+    
+    endpoints = {}
+    for dir_name, dir_data in train_routes.items():
+        if dir_name in ('aliases', 'icon'):
+            continue
+        
+        dkey = dir_name
+        
+        # Find non-loop route plans and short-turn routes (回库车 / 终点车)
+        non_loop_plans = {}
+        for route_name, route_info in dir_data.items():
+            if route_name in ('aliases', 'icon', 'reversed', '环行'):
+                continue
+            # A train is "non-loop" if it has loop:false OR ends_with (short-turn)
+            is_nonloop = not route_info.get('loop', True)
+            has_end = 'ends_with' in route_info
+            if is_nonloop or has_end:
+                # Determine terminal station
+                terminal = route_info.get('ends_with')
+                if not terminal and '回库车' in route_name:
+                    terminal = route_name.replace('回库车', '').strip()
+                if terminal:
+                    non_loop_plans[route_name] = terminal
+        
+        if not non_loop_plans:
+            continue
+        
+        endpoints[dkey] = {}
+        for dg_name in date_groups:
+            # Map to standard key
+            weekday_days = date_groups[dg_name].get('weekday', [])
+            if set(weekday_days) <= {1, 2, 3, 4, 5} and weekday_days:
+                mk = '工作日'
+            elif set(weekday_days) <= {6, 7} and weekday_days:
+                mk = '双休日'
+            elif dg_name in ('全日',):
+                mk = 'both'
+            else:
+                mk = dg_name
+            
+            keys = [mk] if mk != 'both' else ['工作日', '双休日']
+            for k in keys:
+                if k in endpoints[dkey]:
+                    continue
+                
+                # Get departure times and filters from first station
+                st_tt = timetable.get(first_station, {}).get(dkey, {}).get(dg_name, {})
+                sched_blocks = st_tt.get('schedule', [])
+                filters_raw = st_tt.get('filters', [])
+                
+                if not sched_blocks or not filters_raw:
+                    endpoints[dkey][k] = None
+                    continue
+                
+                all_times = get_all_times(sched_blocks)
+                
+                # Attach route_data to each filter for terminal station lookup
+                enriched_filters = []
+                for f in filters_raw:
+                    plan = f.get('plan', '')
+                    if plan in non_loop_plans:
+                        ef = dict(f)
+                        ef['route_data'] = dir_data.get(plan, {})
+                        ef['_terminal'] = non_loop_plans[plan]
+                        enriched_filters.append(ef)
+                
+                if not enriched_filters:
+                    endpoints[dkey][k] = None
+                    continue
+                
+                route_indices = apply_filters(all_times, enriched_filters)
+                
+                # Build endpoint list: index i = terminal name or None
+                ep_list = [None] * len(all_times)
+                for plan, indices in route_indices.items():
+                    terminal = non_loop_plans.get(plan)
+                    for idx in indices:
+                        if idx < len(ep_list):
+                            ep_list[idx] = terminal
+                
+                endpoints[dkey][k] = ep_list
+    
+    return endpoints
+
 # ── Load all line data ──
 LINE_FILE_NAMES = [
     'line1.json5', 'line2.json5', 'line3.json5', 'line4.json5', 'line5.json5',
@@ -205,6 +370,22 @@ for fn in LINE_FILE_NAMES:
                         minutes_list = [int(t[:2]) * 60 + int(t[3:]) for t in all_times]
                         schedule[dkey][mk][sname] = minutes_list
     
+    # Parse train endpoints for loop lines (回库车 terminate early)
+    train_endpoints = {}
+    if is_loop:
+        train_endpoints = parse_train_endpoints(
+            directions, train_routes, timetable, date_groups,
+            stations_raw[0]['name']
+        )
+        if train_endpoints:
+            ep_count = sum(
+                sum(1 for v in ep if v is not None)
+                for dkey in train_endpoints
+                for ep in train_endpoints[dkey].values()
+                if ep
+            )
+            print("    trainEndpoints: %d entries" % ep_count)
+    
     line_info = {
         'name': name,
         'color': color,
@@ -212,6 +393,7 @@ for fn in LINE_FILE_NAMES:
         'directions': directions,
         'stations': stations,
         'schedule': schedule,
+        'trainEndpoints': train_endpoints,
         # Raw route info for tooltip display
         'routeNames': {dkey: dir_data['routes'] for dkey, dir_data in [(d['key'], d) for d in directions]}
     }

@@ -369,6 +369,14 @@ function getActiveTrains(line,dtime){
 
       // Loop line: check if train is on the closing segment (last station → first station)
       if(!found&&line.loop&&orderedNames.length>1){
+        // Check if this train is a 回库车 (terminates at an intermediate station)
+        const epList=line.trainEndpoints&&line.trainEndpoints[dk]&&line.trainEndpoints[dk][dg];
+        const terminalStation=epList&&di<epList.length?epList[di]:null;
+        if(terminalStation){
+          // This train terminates before completing the loop — don't show on closing segment
+          trainIdx++;continue;
+        }
+
         // Estimate loop-closing travel time from this train's actual average segment time
         // Use Math.ceil (not Math.round) to avoid underestimating — the closing segment
         // is typically longer than average because it's a physical curve between terminals.
