@@ -315,7 +315,7 @@ function tick() {
   const dstr = d.getFullYear() + '年' + (d.getMonth()+1) + '月' + d.getDate() + '日 ' + ['周日','周一','周二','周三','周四','周五','周六'][d.getDay()];
   document.getElementById('dateDisp').textContent = dstr;
   
-  updateBaseMap(d.getHours());
+  updateMapTheme(d);
   updateTrains(false);
 }
 setInterval(tick, 1000);
@@ -750,7 +750,7 @@ let trainMarkers={};
 function updateTrains(forced=false){
   const allTrains=[];
   const lineDirCounts={}; // li -> {dirKey: count, _total: count}
-  const dtime=simTime||new Date();
+  const dtime=new Date(simTimeMs);
 
   LINES.forEach((line,li)=>{
     if (!lineVisible[li]) return; // Skip invisible lines directly
