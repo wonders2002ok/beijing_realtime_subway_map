@@ -377,6 +377,11 @@ function getActiveTrains(line,dtime){
           trainIdx++;continue;
         }
 
+        if(prevSt!==orderedNames[orderedNames.length-1]){
+          // Train terminated early (did not reach end of loop array). Do not close the loop.
+          trainIdx++;continue;
+        }
+
         // Estimate loop-closing travel time from this train's actual average segment time
         // Use Math.ceil (not Math.round) to avoid underestimating — the closing segment
         // is typically longer than average because it's a physical curve between terminals.
@@ -675,7 +680,13 @@ function updateTrains(){
 
   // Remove old
   for(const k of Object.keys(trainMarkers)){
-    if(!curKeys.has(k)){map.removeLayer(trainMarkers[k]);delete trainMarkers[k];}
+    if(!curKeys.has(k)){
+      if(activePopup && activePopup._trainId === k){
+        closeActivePopup();
+      }
+      map.removeLayer(trainMarkers[k]);
+      delete trainMarkers[k];
+    }
   }
 
   // Add/update
@@ -689,14 +700,34 @@ function updateTrains(){
 
     if(trainMarkers[t.id]){
       const m=trainMarkers[t.id];
+      m._t=t;
       m.setLatLng([pos.lat,pos.lng]);
       m.setIcon(makeTrainIcon(line.color,bearing));
       m.setOpacity(isDimmed?0.15:1);
+      m.setTooltipContent(
+        '<div class="tt-no">车辆编号：'+t.id+'</div>'+
+        '<div class="tt-dir">'+t.dir+'</div>'+
+        '<div class="tt-st">'+t.from+' ➜ '+t.to+'</div>'+
+        '<div class="tt-tm">到站 '+t.arr+'</div>'+
+        '<div class="tt-line" style="background:'+line.color+'22;color:'+line.color+'">'+t.lineName+'</div>'
+      );
       if(activePopup && activePopup._trainId === t.id){
         activePopup.setLatLng([pos.lat,pos.lng]);
+        const html='<div class="popup-card" style="position:relative">'
+          +'<span class="popup-close" onclick="closeActivePopup()">&times;</span>'
+          +'<div class="train-no">车辆编号：'+t.id+'</div>'
+          +'<div class="popup-title">'+t.lineName+'</div>'
+          +'<div class="popup-row"><b>方向：</b>'+t.dir+'</div>'
+          +'<div class="popup-row"><b>区间：</b>'+t.from+' ➜ '+t.to+'</div>'
+          +'<div class="popup-row"><b>发车：</b>'+t.dep+'</div>'
+          +'<div class="popup-row"><b>到站：</b>'+t.arr+'</div>'
+          +'<div class="popup-line-tag" style="background:'+line.color+'22;color:'+line.color+';border:1px solid '+line.color+'44;margin-top:6px">'+line.name+'</div>'
+          +'</div>';
+        activePopup.setContent(html);
       }
     }else{
       const m=L.marker([pos.lat,pos.lng],{icon:makeTrainIcon(line.color,bearing)}).addTo(map);
+      m._t=t;
       m.bindTooltip(
         '<div class="tt-no">车辆编号：'+t.id+'</div>'+
         '<div class="tt-dir">'+t.dir+'</div>'+
@@ -711,19 +742,20 @@ function updateTrains(){
         L.DomEvent.preventDefault(e);
         e.originalEvent._clickedMarker=true;
         closeActivePopup();
+        const tr=m._t;
         const html='<div class="popup-card" style="position:relative">'
           +'<span class="popup-close" onclick="closeActivePopup()">&times;</span>'
-          +'<div class="train-no">车辆编号：'+t.id+'</div>'
-          +'<div class="popup-title">'+t.lineName+'</div>'
-          +'<div class="popup-row"><b>方向：</b>'+t.dir+'</div>'
-          +'<div class="popup-row"><b>区间：</b>'+t.from+' ➜ '+t.to+'</div>'
-          +'<div class="popup-row"><b>发车：</b>'+t.dep+'</div>'
-          +'<div class="popup-row"><b>到站：</b>'+t.arr+'</div>'
+          +'<div class="train-no">车辆编号：'+tr.id+'</div>'
+          +'<div class="popup-title">'+tr.lineName+'</div>'
+          +'<div class="popup-row"><b>方向：</b>'+tr.dir+'</div>'
+          +'<div class="popup-row"><b>区间：</b>'+tr.from+' ➜ '+tr.to+'</div>'
+          +'<div class="popup-row"><b>发车：</b>'+tr.dep+'</div>'
+          +'<div class="popup-row"><b>到站：</b>'+tr.arr+'</div>'
           +'<div class="popup-line-tag" style="background:'+line.color+'22;color:'+line.color+';border:1px solid '+line.color+'44;margin-top:6px">'+line.name+'</div>'
           +'</div>';
         activePopup=L.popup({closeButton:false,className:'popup-card',maxWidth:300,offset:[0,-10]})
-          .setLatLng([pos.lat,pos.lng]).setContent(html).openOn(map);
-        activePopup._trainId = t.id;
+          .setLatLng(m.getLatLng()).setContent(html).openOn(map);
+        activePopup._trainId = tr.id;
       });
       m.setOpacity(isDimmed?0.15:1);
       trainMarkers[t.id]=m;
