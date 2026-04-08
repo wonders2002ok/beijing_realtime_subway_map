@@ -1,0 +1,177 @@
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans SC",sans-serif;background:#080c14;color:#e0e0e0;overflow:hidden}
+#map{position:absolute;top:0;bottom:0;left:0;right:0;z-index:1}
+.leaflet-container{background:#080c14!important}
+/* Dim the basemap so subway lines stand out (default: night mode; overridden by JS for day mode) */
+.leaflet-tile-pane{filter:brightness(0.55) saturate(0.6)}
+
+/* Panel */
+#panel{
+  position:absolute;top:10px;left:10px;z-index:1000;
+  background:rgba(8,12,20,0.95);backdrop-filter:blur(24px);
+  border:1px solid rgba(255,255,255,0.06);border-radius:16px;
+  padding:16px 18px;width:280px;max-height:calc(100vh - 20px);overflow-y:auto;
+  box-shadow:0 8px 40px rgba(0,0,0,0.6);
+  scrollbar-width:thin;scrollbar-color:#333 transparent;
+}
+#panel::-webkit-scrollbar{width:4px}
+#panel::-webkit-scrollbar-thumb{background:#444;border-radius:2px}
+#panel h1{
+  font-size:17px;font-weight:700;margin-bottom:1px;
+  background:linear-gradient(135deg,#e74c3c,#f39c12,#2ecc71,#3498db,#9b59b6);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+#panel .subtitle{font-size:10px;color:#555;margin-bottom:10px}
+#panel .time-display{
+  font-size:32px;font-weight:200;letter-spacing:2px;
+  font-variant-numeric:tabular-nums;color:#fff;
+}
+#panel .time-display .sec{font-size:14px;color:#555}
+#panel .date-display{font-size:10px;color:#555;margin-bottom:10px}
+#panel .mode-label{font-size:10px;color:#6366f1;margin-bottom:8px}
+
+/* Stats */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px}
+.stat-box{
+  background:rgba(255,255,255,0.03);border-radius:10px;padding:8px 6px;
+  text-align:center;border:1px solid rgba(255,255,255,0.04);
+}
+.stat-box .val{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.stat-box .lbl{font-size:8px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-top:1px}
+.stat-box.total .val{color:#fbbf24}
+
+/* Line list (legend) */
+.line-filter{
+  display:flex;flex-direction:column;gap:2px;
+  margin-bottom:8px;max-height:260px;overflow-y:auto;
+  scrollbar-width:thin;scrollbar-color:#333 transparent;
+}
+.line-filter::-webkit-scrollbar{width:3px}
+.line-filter::-webkit-scrollbar-thumb{background:#444;border-radius:2px}
+.line-chip{
+  display:flex;align-items:center;gap:6px;
+  padding:3px 8px;border-radius:6px;font-size:11px;cursor:pointer;
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);
+  transition:all .15s;user-select:none;
+}
+.line-chip:hover{background:rgba(255,255,255,0.06)}
+.line-chip.off{opacity:.25}
+.line-chip .cdot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.line-chip .cname{font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#ccc;font-size:11px}
+.line-chip .cdir{font-size:9px;color:#666;white-space:nowrap;font-variant-numeric:tabular-nums}
+.line-chip .cdir b{color:#999;font-weight:600}
+
+/* Controls */
+.controls{display:flex;gap:4px;margin-bottom:8px}
+.controls button{
+  flex:1;padding:5px 6px;border:1px solid rgba(255,255,255,0.08);
+  background:rgba(255,255,255,0.04);color:#999;border-radius:6px;
+  cursor:pointer;font-size:10px;transition:all .15s;
+}
+.controls button:hover{background:rgba(255,255,255,0.08);color:#fff}
+.controls button.active{background:rgba(99,102,241,0.2);border-color:rgba(99,102,241,0.35);color:#fff}
+
+.speed-ctrl{display:flex;align-items:center;gap:5px;margin-bottom:8px}
+.speed-ctrl label{font-size:9px;color:#555;min-width:36px}
+.speed-ctrl input[type=range]{flex:1;accent-color:#6366f1;height:2px}
+.speed-ctrl .sv{font-size:9px;color:#6366f1;font-weight:600;min-width:24px;text-align:right}
+
+/* Tooltip */
+.tt{background:rgba(8,12,20,0.92)!important;border:1px solid rgba(255,255,255,0.1)!important;border-radius:6px!important;padding:6px 8px!important;color:#ddd!important;font-size:12px!important;line-height:1.5!important}
+.tt::before{display:none!important}
+.tt-dir{font-weight:600;color:#fff;font-size:13px}
+.tt-no{font-family:'Courier New',monospace;font-weight:700;color:#818cf8;font-size:13px;letter-spacing:.5px}
+.tt-st{color:#aaa;font-size:12px}
+.tt-tm{color:#999;font-size:12px}
+.tt-line{display:inline-block;padding:1px 5px;border-radius:3px;font-size:11px;margin-top:2px}
+
+/* Station tooltip */
+.st-tip{background:rgba(8,12,20,0.9)!important;border:1px solid rgba(255,255,255,0.08)!important;border-radius:6px!important;padding:4px 8px!important;color:#ddd!important;font-size:12px!important;font-weight:500!important;box-shadow:0 2px 10px rgba(0,0,0,0.4)!important}
+.st-tip::before{display:none!important}
+.st-tip .stn-lines{display:flex;flex-wrap:wrap;gap:2px;margin-top:2px}
+.st-tip .stn-dot{width:6px;height:6px;border-radius:50%;display:inline-block}
+
+/* Persistent popup for trains & stations */
+.popup-card .leaflet-popup-content-wrapper{
+  background:rgba(10,14,24,0.96)!important;border:1px solid rgba(255,255,255,0.1)!important;
+  border-radius:12px!important;padding:0!important;color:#ddd!important;
+  box-shadow:0 8px 32px rgba(0,0,0,0.6)!important;
+}
+.popup-card .leaflet-popup-content{
+  margin:16px 18px!important;font-size:13px!important;line-height:1.6!important;min-width:220px;
+}
+.popup-card .leaflet-popup-tip{background:rgba(10,14,24,0.96)!important;border:none!important}
+.popup-card .popup-close{
+  position:absolute;top:10px;right:14px;cursor:pointer;z-index:2;
+  font-size:20px;color:#666;line-height:1;
+  transition:color .15s;
+}
+.popup-card .popup-close:hover{color:#fff}
+.popup-card .popup-title{font-weight:700;font-size:15px;color:#fff;margin-bottom:6px;margin-right:24px}
+.popup-card .popup-row{margin-bottom:4px;font-size:13px}
+.popup-card .popup-row b{color:#ccc;font-weight:600}
+.popup-card .popup-lines{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.popup-card .popup-line-tag{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:2px 8px;border-radius:6px;font-size:12px;font-weight:600;
+}
+.popup-card .popup-addr{font-size:11px;color:#666;margin-top:6px}
+
+/* Train popup extras */
+.popup-card .train-no{
+  font-family:'Courier New',monospace;font-weight:700;
+  color:#818cf8;font-size:16px;letter-spacing:1px;
+}
+
+/* Highlight mode: dim non-selected lines */
+.line-dimmed{opacity:.15!important;transition:opacity .3s}
+.line-dimmed .st-dot,.line-dimmed .st-transfer-icon{opacity:.15!important}
+.line-dimmed .train-marker{opacity:.15!important}
+.line-chip.highlighted{background:rgba(255,255,255,0.08)!important;border-color:rgba(255,255,255,0.15)!important}
+
+/* Marker styles */
+.station-marker{background:none!important;border:none!important}
+/* Regular station: white circle with line-color border (Beijing subway standard) */
+.st-dot{
+  width:15px;height:15px;border-radius:50%;
+  background:#fff;border:2.5px solid var(--lc,#888);
+  box-shadow:0 1px 3px rgba(0,0,0,0.4);
+  transform:scale(var(--station-scale,0.53));
+  transition:transform .25s ease;
+}
+.st-label{
+  font-size:8px;color:#bbb;white-space:nowrap;
+  text-shadow:0 0 3px #000,0 0 6px #000,0 1px 2px #000;
+  font-weight:500;pointer-events:none;
+}
+.st-label.terminal{font-weight:700;color:#fff;font-size:9px}
+
+.train-marker{background:none!important;border:none!important;transition:transform 1s linear;}
+/* Train fade in/out for smoother appearance */
+.train-marker .leaflet-marker-icon{
+  opacity:0;
+  animation:trainFadeIn 0.5s ease forwards;
+}
+@keyframes trainFadeIn{
+  from{opacity:0;transform:scale(0.5)}
+  to{opacity:1;transform:scale(1)}
+}
+
+/* Station icon zoom-dependent scaling — all station markers use --station-scale */
+.line-layer-hidden .st-dot{opacity:.15!important}
+.line-layer-hidden .st-transfer-icon{opacity:.15!important}
+/* Highlight mode: dim stations not on selected line */
+.station-dimmed .st-dot{opacity:.12!important}
+.station-dimmed .st-transfer-icon{opacity:.12!important}
+.st-transfer-icon{
+  width:15px;height:15px;
+  transform:scale(var(--station-scale,0.53));
+  transition:transform .25s ease;
+}
+
+/* Responsive */
+@media(max-width:600px){
+  #panel{width:220px;padding:12px 14px;font-size:10px}
+  .stat-box .val{font-size:18px}
+  .time-display{font-size:26px!important}
+}

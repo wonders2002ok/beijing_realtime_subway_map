@@ -416,17 +416,29 @@ if station_coord_missing:
 
 print("\nTotal lines loaded: %d" % len(lines_output))
 
-# ── Inject into HTML template ──
-print("\nLoading template...")
-with open(TEMPLATE_PATH, 'r', encoding='utf-8') as f:
-    html = f.read()
+# ── Generate output files ──
+import shutil
+
+# 1. Generate js/data.js from js/data.template.js
+DATA_TEMPLATE = os.path.join(PROJECT_ROOT, 'js', 'data.template.js')
+DATA_OUTPUT = os.path.join(PROJECT_ROOT, 'js', 'data.js')
+
+print("\nGenerating js/data.js...")
+with open(DATA_TEMPLATE, 'r', encoding='utf-8') as f:
+    data_js = f.read()
 
 lines_json = json.dumps(lines_output, ensure_ascii=False, separators=(',', ':'))
-html = html.replace('__LINES__', lines_json, 1)
+data_js = data_js.replace('__LINES__', lines_json, 1)
 
-with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
-    f.write(html)
+with open(DATA_OUTPUT, 'w', encoding='utf-8') as f:
+    f.write(data_js)
 
-size_kb = len(html.encode('utf-8')) // 1024
-print("Output: %s (%d KB)" % (OUTPUT_PATH, size_kb))
+data_kb = len(data_js.encode('utf-8')) // 1024
+print("  js/data.js (%d KB)" % data_kb)
+
+# 2. Copy template.html -> index.html
+print("Copying template.html -> index.html...")
+shutil.copy2(TEMPLATE_PATH, OUTPUT_PATH)
+
+print("Output: %s" % OUTPUT_PATH)
 print("Done!")
