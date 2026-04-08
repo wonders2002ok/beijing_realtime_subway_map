@@ -169,6 +169,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
 /* Station icon zoom-dependent scaling — all station markers use --station-scale */
 .line-layer-hidden .st-dot{opacity:.15!important}
 .line-layer-hidden .st-transfer-icon{opacity:.15!important}
+/* Highlight mode: dim stations not on selected line */
+.station-dimmed .st-dot{opacity:.12!important}
+.station-dimmed .st-transfer-icon{opacity:.12!important}
 .st-transfer-icon{
   width:15px;height:15px;
   transform:scale(var(--station-scale,0.53));
@@ -379,6 +382,9 @@ function getActiveTrains(line,dtime){
           const pr=durSec>0?elapsedSec/durSec:0;
           const fi=line.stIdx[prevSt],ti2=line.stIdx[orderedNames[0]];
           if(fi!==undefined&&ti2!==undefined){
+            // For loop closing segment, use the simple two-point interpolation
+            // (fi and ti are physically adjacent, even if their array indices differ)
+            // The path is NOT needed here — just interpolate between prevSt and firstSt
             out.push({
               id:makeTrainId(line.name,dk,trainIdx),
               fi,ti:ti2,pr,
@@ -494,6 +500,7 @@ LINES.forEach((line,li)=>{
 const drawnStations=new Set();
 const linePolylines=[];
 const stationMarkers={};
+const stationLineSet={}; // key -> Set of line indices
 let activePopup=null;
 
 // Highlight mode
@@ -513,6 +520,8 @@ LINES.forEach((line,li)=>{
   // Stations
   line.stations.forEach((st,idx)=>{
     const k=st.name+'_'+st.lng.toFixed(4);
+    if(!stationLineSet[k])stationLineSet[k]=new Set();
+    stationLineSet[k].add(li);
     if(drawnStations.has(k))return;
     drawnStations.add(k);
 
@@ -605,12 +614,26 @@ function highlightLine(li){
     if(i===li){chip.classList.add('highlighted');chip.style.opacity='';}
     else{chip.classList.remove('highlighted');chip.style.opacity='0.3';}
   });
+  // Dim station markers not on selected line
+  Object.keys(stationMarkers).forEach(k=>{
+    const m=stationMarkers[k];
+    const lines=stationLineSet[k];
+    if(lines&&lines.has(li)){
+      m.getElement().classList.remove('station-dimmed');
+    }else{
+      m.getElement().classList.add('station-dimmed');
+    }
+  });
 }
 
 function unhighlightAll(){
   highlightedLine=-1;
   linePolylines.forEach(({main})=>{main.setStyle({opacity:0.9});});
   document.querySelectorAll('.line-chip').forEach(chip=>{chip.classList.remove('highlighted');chip.style.opacity='';});
+  // Restore all station markers
+  Object.keys(stationMarkers).forEach(k=>{
+    stationMarkers[k].getElement().classList.remove('station-dimmed');
+  });
 }
 
 // Click map to dismiss popup & unhighlight
