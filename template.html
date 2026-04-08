@@ -345,7 +345,10 @@ function getActiveTrains(line,dtime){
       // Loop line: check if train is on the closing segment (last station → first station)
       if(!found&&line.loop&&orderedNames.length>1){
         // Estimate loop-closing travel time from this train's actual average segment time
-        const avgSegTime=segTimesArr.length>0?Math.round(segTimeSum/segTimesArr.length):3;
+        // Use Math.ceil (not Math.round) to avoid underestimating — the closing segment
+        // is typically longer than average because it's a physical curve between terminals.
+        // Minimum 3 minutes ensures no "disappearing train" gaps on dense loop lines.
+        const avgSegTime=segTimesArr.length>0?Math.max(3,Math.ceil(segTimeSum/segTimesArr.length)):3;
         const nextLoop=prevMin+avgSegTime;
 
         if(effectiveTm>=prevMin&&effectiveTm<nextLoop){
