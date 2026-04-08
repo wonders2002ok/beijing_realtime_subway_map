@@ -497,32 +497,66 @@ function getActiveTrains(line,dtime){
   return out;
 }
 
+function interpAlongPath(pts, pr){
+  // Interpolate along an array of [lat,lng] points with progress ratio pr (0..1)
+  if(!pts||pts.length<2) return null;
+  // Compute cumulative distances
+  let totalDist=0;
+  const dists=[0];
+  for(let i=1;i<pts.length;i++){
+    const dx=pts[i][1]-pts[i-1][1], dy=pts[i][0]-pts[i-1][0];
+    totalDist+=Math.sqrt(dx*dx+dy*dy);
+    dists.push(totalDist);
+  }
+  if(totalDist===0) return {lat:pts[0][0],lng:pts[0][1]};
+  const target=Math.max(0,Math.min(1,pr))*totalDist;
+  for(let i=1;i<dists.length;i++){
+    if(target<=dists[i]){
+      const segLen=dists[i]-dists[i-1];
+      const t=segLen>0?(target-dists[i-1])/segLen:0;
+      return {
+        lat:pts[i-1][0]+(pts[i][0]-pts[i-1][0])*t,
+        lng:pts[i-1][1]+(pts[i][1]-pts[i-1][1])*t
+      };
+    }
+  }
+  return {lat:pts[pts.length-1][0],lng:pts[pts.length-1][1]};
+}
+
 function interp(train,line){
   const f=line.stations[train.fi],t=line.stations[train.ti];
   if(!f||!t)return null;
   // If train has a path (loop return segment), interpolate along all intermediate stations
   if(train.path&&train.path.length>1){
-    let totalDist=0;
-    const segs=[];
+    // Gather curved sub-segments for the multi-station path
+    const allPts=[];
+    const li=LINES.indexOf(line);
+    const segMap=curvedSegments[li];
     for(let i=1;i<train.path.length;i++){
-      const a=line.stations[train.path[i-1]],b=line.stations[train.path[i]];
-      if(!a||!b)continue;
-      const dx=b.lng-a.lng,dy=b.lat-a.lat;
-      const d=Math.sqrt(dx*dx+dy*dy);
-      segs.push({i,dist:totalDist,from:a,to:b,dx,dy});
-      totalDist+=d;
-    }
-    const targetDist=train.pr*totalDist;
-    for(let i=segs.length-1;i>=0;i--){
-      if(targetDist>=segs[i].dist){
-        const seg=segs[i];
-        const segPr=seg.d>0?(targetDist-segs[i].dist)/seg.d:0;
-        return{lng:seg.from.lng+seg.dx*segPr,lat:seg.from.lat+seg.dy*segPr};
+      const key=train.path[i-1]+'_'+train.path[i];
+      const seg=segMap&&segMap[key];
+      if(seg&&seg.length>=2){
+        // Avoid duplicating the junction point
+        if(allPts.length>0) allPts.push(...seg.slice(1));
+        else allPts.push(...seg);
+      } else {
+        const a=line.stations[train.path[i-1]],b=line.stations[train.path[i]];
+        if(!a||!b)continue;
+        if(allPts.length>0) allPts.push([b.lat,b.lng]);
+        else { allPts.push([a.lat,a.lng]); allPts.push([b.lat,b.lng]); }
       }
     }
+    if(allPts.length>=2) return interpAlongPath(allPts, train.pr);
     const last=line.stations[train.path[train.path.length-1]];
     return{lng:last.lng,lat:last.lat};
   }
+  // Use curved segment if available
+  const li=LINES.indexOf(line);
+  const segMap=curvedSegments[li];
+  const key=train.fi+'_'+train.ti;
+  const seg=segMap&&segMap[key];
+  if(seg&&seg.length>=2) return interpAlongPath(seg, train.pr);
+  // Fallback: straight line
   return{lng:f.lng+(t.lng-f.lng)*train.pr,lat:f.lat+(t.lat-f.lat)*train.pr};
 }
 
@@ -598,6 +632,9 @@ let activePopup=null;
 // Highlight mode
 let highlightedLine=-1;
 
+// Per-line curved segment lookup: curvedSegments[li] = Map of "fi_ti" -> [[lat,lng], ...]
+const curvedSegments={};
+
 LINES.forEach((line,li)=>{
   const coords=line.stations.filter(s=>s.lng!==null).map(s=>[s.lat,s.lng]);
   if(coords.length<2)return;
@@ -616,6 +653,36 @@ LINES.forEach((line,li)=>{
   const mainOpts={color:line.color,weight:5,opacity:1.0,lineJoin:'round'};
   const main=L.polyline(renderCoords,mainOpts).addTo(map);
   linePolylines.push({main,li});
+
+  // Build per-segment curved coordinate lookup for train interpolation
+  // For each pair of adjacent stations, find the sub-curve of renderCoords between them
+  const segMap={};
+  const validStations=line.stations.filter(s=>s.lng!==null);
+  const stationCoords=validStations.map(s=>[s.lat,s.lng]);
+  if(line.loop) stationCoords.push(stationCoords[0]);
+  // Find nearest point index on renderCoords for each station
+  function nearestIdx(pt, arr){
+    let best=0,bestD=Infinity;
+    for(let i=0;i<arr.length;i++){
+      const dx=arr[i][0]-pt[0],dy=arr[i][1]-pt[1],d=dx*dx+dy*dy;
+      if(d<bestD){bestD=d;best=i;}
+    }
+    return best;
+  }
+  const stIdxOnCurve=stationCoords.map(sc=>nearestIdx(sc,renderCoords));
+  // Ensure monotonically increasing indices (fallback for very close stations)
+  for(let i=1;i<stIdxOnCurve.length;i++){
+    if(stIdxOnCurve[i]<=stIdxOnCurve[i-1]) stIdxOnCurve[i]=Math.min(stIdxOnCurve[i-1]+1, renderCoords.length-1);
+  }
+  for(let i=0;i<stationCoords.length-1;i++){
+    const si=line.stIdx[validStations[i%validStations.length].name];
+    const ei=line.stIdx[validStations[(i+1)%validStations.length].name];
+    if(si===undefined||ei===undefined)continue;
+    const startI=stIdxOnCurve[i], endI=stIdxOnCurve[i+1];
+    const seg=renderCoords.slice(startI, endI+1);
+    if(seg.length>=2) segMap[si+'_'+ei]=seg;
+  }
+  curvedSegments[li]=segMap;
 
   // Stations
   line.stations.forEach((st,idx)=>{
