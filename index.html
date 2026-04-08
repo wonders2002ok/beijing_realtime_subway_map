@@ -379,20 +379,13 @@ function getActiveTrains(line,dtime){
           const pr=durSec>0?elapsedSec/durSec:0;
           const fi=line.stIdx[prevSt],ti2=line.stIdx[orderedNames[0]];
           if(fi!==undefined&&ti2!==undefined){
-            // Build path along the line direction for correct multi-segment interpolation
-            const path=[];
-            for(let p=0;p<orderedNames.length;p++){
-              const idx=line.stIdx[orderedNames[p]];
-              if(idx!==undefined)path.push(idx);
-            }
             out.push({
               id:makeTrainId(line.name,dk,trainIdx)+'L',
               fi,ti:ti2,pr,
               dir:dk,
               from:prevSt,to:orderedNames[0],
               dep:fmtM(prevMin),arr:fmtM(nextLoop),
-              lineName:line.name,lineColor:line.color,
-              path
+              lineName:line.name,lineColor:line.color
             });
             found=true;
           }
@@ -635,7 +628,6 @@ function updateTrains(){
   const allTrains=[];
   const lineDirCounts={}; // li -> {dirKey: count, _total: count}
   const dtime=simTime||new Date();
-  cachedTrainList=null; // invalidate cache
 
   LINES.forEach((line,li)=>{
     if(!lineVisible[li])return;
@@ -751,7 +743,6 @@ function toggleLine(li){
       map.removeLayer(pl.main);
     }
   }
-  cachedTrainList=null;
   lastTrainMinute=-1; // force rebuild on next tick
 }
 
@@ -781,7 +772,6 @@ function setMode(m){
   else if(m==='eve'){simTime=new Date(d.getFullYear(),d.getMonth(),d.getDate(),18,0,0);speed=60;document.getElementById('btnEve').classList.add('active');document.getElementById('spdSlider').value=60;document.getElementById('spdVal').textContent='60×';document.getElementById('modeLbl').textContent='晚高峰 18:00';}
   // Clear existing train markers
   Object.keys(trainMarkers).forEach(k=>{map.removeLayer(trainMarkers[k]);delete trainMarkers[k];});
-  cachedTrainList=null;
 }
 function setSpd(v){
   speed=parseInt(v);
@@ -793,8 +783,6 @@ function setSpd(v){
 // MAIN LOOP
 // ═══════════════════════════════════════════════════════════
 let frameCount=0,lastTrainMinute=-1;
-// Cache train list per line — rebuilt only when minute changes
-let cachedTrainList=null;
 
 function tick(){
   const now=Date.now(),dt=now-lastTick;lastTick=now;
@@ -803,45 +791,27 @@ function tick(){
   const dtime=simTime||new Date();
   updateMapTheme(dtime);
   const curMin=dtime.getHours()*60+dtime.getMinutes();
-
+  // Update trains every frame for smooth animation
   if(curMin!==lastTrainMinute){
     // New minute: full recalculation (needed for new/departed trains)
     lastTrainMinute=curMin;
     updateTrains();
-    // Cache the current train list for sub-minute interpolation
-    cachedTrainList=null; // will be rebuilt lazily
-  }
-
-  // Every frame: update positions using seconds-based interpolation
-  // For high-speed modes (speed>1), interpolate smoothly
-  if(speed>1||mode!=='rt'){
-    // Recalculate train positions with second precision
-    if(!cachedTrainList){
-      cachedTrainList=[];
-      LINES.forEach((line,li)=>{
-        if(!lineVisible[li])return;
-        const trains=getActiveTrains(line,dtime);
-        trains.forEach(t=>cachedTrainList.push({train:t,line,li}));
+  }else{
+    // Same minute: just reposition existing trains (smooth interpolation)
+    // Build fresh train list per line for accurate seconds-based pr
+    const dtime2=simTime||new Date();
+    LINES.forEach((line,li)=>{
+      if(!lineVisible[li])return;
+      const trains=getActiveTrains(line,dtime2);
+      trains.forEach(t=>{
+        const m=trainMarkers[t.id];
+        if(!m)return;
+        const pos=interp(t,line);
+        if(!pos)return;
+        m.setLatLng([pos.lat,pos.lng]);
       });
-    }
-    cachedTrainList.forEach(({train:t,line})=>{
-      const m=trainMarkers[t.id];
-      if(!m)return;
-      const pos=interp(t,line);
-      if(!pos)return;
-      m.setLatLng([pos.lat,pos.lng]);
-    });
-  }else if(cachedTrainList){
-    // Real-time mode with cached data: just update positions
-    cachedTrainList.forEach(({train:t,line})=>{
-      const m=trainMarkers[t.id];
-      if(!m)return;
-      const pos=interp(t,line);
-      if(!pos)return;
-      m.setLatLng([pos.lat,pos.lng]);
     });
   }
-
   requestAnimationFrame(tick);
 }
 tick();
