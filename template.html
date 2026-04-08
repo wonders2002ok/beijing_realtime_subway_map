@@ -281,6 +281,46 @@ function scrubTime(val) {
   updateTrains(true);
 }
 
+function setSpd(val) {
+  if(simMode === 'rt' && val != 1) simMode = 'sim';
+  speedMultiplier = parseInt(val);
+  document.getElementById('modeLbl').innerText = simMode==='sim' ? '当前模式: 脱机模拟 ('+val+'x)' : '当前模式: 实时同步流逝';
+}
+
+function tick() {
+  const now = Date.now();
+  const delta = now - lastEpoch;
+  lastEpoch = now;
+
+  if (simMode === 'rt') {
+    simTimeMs = Date.now();
+  } else if (isPlaying) {
+    simTimeMs += delta * speedMultiplier;
+  }
+  
+  const d = new Date(simTimeMs);
+  const secOfDay = d.getHours()*3600 + d.getMinutes()*60 + d.getSeconds();
+  
+  // Update scrubber only if not actively scrubbing
+  if(!document.getElementById('timeSlider').matches(':active')){
+     document.getElementById('timeSlider').value = secOfDay;
+  }
+
+  const m = d.getMinutes(), s = d.getSeconds();
+  document.getElementById('clock').innerHTML = 
+    d.getHours().toString().padStart(2,'0') + ':' + 
+    m.toString().padStart(2,'0') + 
+    '<span class="sec">:' + s.toString().padStart(2,'0') + '</span>';
+  
+  const dstr = d.getFullYear() + '年' + (d.getMonth()+1) + '月' + d.getDate() + '日 ' + ['周日','周一','周二','周三','周四','周五','周六'][d.getDay()];
+  document.getElementById('dateDisp').textContent = dstr;
+  
+  updateBaseMap(d.getHours());
+  updateTrains(false);
+}
+setInterval(tick, 1000);
+
+
 // Train number code mapping
 const LINE_CODES={
   '1号线':'01','2号线':'02','3号线':'03','4号线':'04','5号线':'05',
@@ -862,69 +902,7 @@ function toggleLine(li){
   lastTrainMinute=-1; // force rebuild on next tick
 }
 
-// ═══════════════════════════════════════════════════════════
-// CLOCK
-// ═══════════════════════════════════════════════════════════
-const WK=['日','一','二','三','四','五','六'];
-function updateClock(){
-  const t=simTime||new Date();
-  const h=String(t.getHours()).padStart(2,'0');
-  const m=String(t.getMinutes()).padStart(2,'0');
-  const s=String(t.getSeconds()).padStart(2,'0');
-  document.getElementById('clock').innerHTML=h+':'+m+'<span class="sec">:'+s+'</span>';
-  document.getElementById('dateDisp').textContent=t.getFullYear()+'年'+(t.getMonth()+1)+'月'+t.getDate()+'日 周'+WK[t.getDay()];
-}
 
-// ═══════════════════════════════════════════════════════════
-// MODES
-// ═══════════════════════════════════════════════════════════
-
-  else if(m==='peak'){simTime=new Date(d.getFullYear(),d.getMonth(),d.getDate(),8,0,0);speed=60;document.getElementById('btnPeak').classList.add('active');document.getElementById('spdSlider').value=60;document.getElementById('spdVal').textContent='60×';document.getElementById('modeLbl').textContent='早高峰 08:00';}
-  else if(m==='op'){simTime=new Date(d.getFullYear(),d.getMonth(),d.getDate(),13,0,0);speed=60;document.getElementById('btnOP').classList.add('active');document.getElementById('spdSlider').value=60;document.getElementById('spdVal').textContent='60×';document.getElementById('modeLbl').textContent='平峰 13:00';}
-  else if(m==='eve'){simTime=new Date(d.getFullYear(),d.getMonth(),d.getDate(),18,0,0);speed=60;document.getElementById('btnEve').classList.add('active');document.getElementById('spdSlider').value=60;document.getElementById('spdVal').textContent='60×';document.getElementById('modeLbl').textContent='晚高峰 18:00';}
-  // Clear existing train markers
-  Object.keys(trainMarkers).forEach(k=>{map.removeLayer(trainMarkers[k]);delete trainMarkers[k];});
-}
-
-}
-
-// ═══════════════════════════════════════════════════════════
-// MAIN LOOP
-// ═══════════════════════════════════════════════════════════
-let frameCount=0,lastTrainMinute=-1;
-
-function tick(){
-  const now=Date.now(),dt=now-lastTick;lastTick=now;
-  if(simTime&&speed>1)simTime=new Date(simTime.getTime()+dt*speed);
-  updateClock();
-  const dtime=simTime||new Date();
-  updateMapTheme(dtime);
-  const curMin=dtime.getHours()*60+dtime.getMinutes();
-  // Update trains every frame for smooth animation
-  if(curMin!==lastTrainMinute){
-    // New minute: full recalculation (needed for new/departed trains)
-    lastTrainMinute=curMin;
-    updateTrains();
-  }else{
-    // Same minute: just reposition existing trains (smooth interpolation)
-    // Build fresh train list per line for accurate seconds-based pr
-    const dtime2=simTime||new Date();
-    LINES.forEach((line,li)=>{
-    if (!lineVisible[li]) return; // Skip invisible lines directly
-      if(!lineVisible[li])return;
-      const trains=getActiveTrains(line,dtime2);
-      trains.forEach(t=>{
-        const m=trainMarkers[t.id];
-        if(!m)return;
-        const pos=interp(t,line);
-        if(!pos)return;
-        m.setLatLng([pos.lat,pos.lng]);
-      });
-    });
-  }
-  requestAnimationFrame(tick);
-}
-tick();
 
 // Fit bounds
 let allCoords=[];
