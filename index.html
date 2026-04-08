@@ -692,10 +692,13 @@ function updateTrains(){
       m.setLatLng([pos.lat,pos.lng]);
       m.setIcon(makeTrainIcon(line.color,bearing));
       m.setOpacity(isDimmed?0.15:1);
+      if(activePopup && activePopup._trainId === t.id){
+        activePopup.setLatLng([pos.lat,pos.lng]);
+      }
     }else{
       const m=L.marker([pos.lat,pos.lng],{icon:makeTrainIcon(line.color,bearing)}).addTo(map);
       m.bindTooltip(
-        '<div class="tt-no">No.'+t.id+'</div>'+
+        '<div class="tt-no">车辆编号：'+t.id+'</div>'+
         '<div class="tt-dir">'+t.dir+'</div>'+
         '<div class="tt-st">'+t.from+' ➜ '+t.to+'</div>'+
         '<div class="tt-tm">到站 '+t.arr+'</div>'+
@@ -710,7 +713,7 @@ function updateTrains(){
         closeActivePopup();
         const html='<div class="popup-card" style="position:relative">'
           +'<span class="popup-close" onclick="closeActivePopup()">&times;</span>'
-          +'<div class="train-no">No.'+t.id+'</div>'
+          +'<div class="train-no">车辆编号：'+t.id+'</div>'
           +'<div class="popup-title">'+t.lineName+'</div>'
           +'<div class="popup-row"><b>方向：</b>'+t.dir+'</div>'
           +'<div class="popup-row"><b>区间：</b>'+t.from+' ➜ '+t.to+'</div>'
@@ -720,6 +723,7 @@ function updateTrains(){
           +'</div>';
         activePopup=L.popup({closeButton:false,className:'popup-card',maxWidth:300,offset:[0,-10]})
           .setLatLng([pos.lat,pos.lng]).setContent(html).openOn(map);
+        activePopup._trainId = t.id;
       });
       m.setOpacity(isDimmed?0.15:1);
       trainMarkers[t.id]=m;
