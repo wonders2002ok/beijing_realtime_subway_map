@@ -600,8 +600,7 @@ function updateTrains(forced=false){
   const dtime=new Date(simTimeMs);
 
   LINES.forEach((line,li)=>{
-    if (!lineVisible[li]) return; // Skip invisible lines directly
-    if(!lineVisible[li])return;
+    if (!lineVisible[li]) return; 
     const trains=getActiveTrains(line,dtime);
     lineDirCounts[li]={'_total':trains.length};
     trains.forEach(t=>{
@@ -768,10 +767,7 @@ function toggleLine(li){
       map.removeLayer(pl.main);
     }
   }
-  lastTrainMinute=-1; // force rebuild on next tick
 }
-
-
 
 // Fit bounds
 let allCoords=[];

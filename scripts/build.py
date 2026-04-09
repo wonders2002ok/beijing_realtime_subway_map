@@ -399,14 +399,6 @@ for fn in LINE_FILE_NAMES:
     }
     lines_output.append(line_info)
     
-    # Stats
-    total_trains = 0
-    for dkey in schedule:
-        for dg in schedule[dkey]:
-            # Count trains from first station
-            first_st = stations[0]['name']
-            if first_st in schedule[dkey][dg]:
-                total_trains = max(total_trains, len(schedule[dkey][dg][first_st]))
     print("  %s: %d stations, %d dirs, loop=%s" % (name, len(stations), len(directions), is_loop))
 
 if station_coord_missing:
