@@ -78,18 +78,27 @@ function tick() {
   }
 
   const m = d.getMinutes(), s = d.getSeconds();
-  document.getElementById('clock').innerHTML = 
-    d.getHours().toString().padStart(2,'0') + ':' + 
+  
+  const newClockHtml = d.getHours().toString().padStart(2,'0') + ':' + 
     m.toString().padStart(2,'0') + 
     '<span class="sec">:' + s.toString().padStart(2,'0') + '</span>';
+  const clockEl = document.getElementById('clock');
+  if (clockEl.innerHTML !== newClockHtml) {
+      clockEl.innerHTML = newClockHtml;
+  }
   
   const dstr = d.getFullYear() + '年' + (d.getMonth()+1) + '月' + d.getDate() + '日 ' + ['周日','周一','周二','周三','周四','周五','周六'][d.getDay()];
-  document.getElementById('dateDisp').textContent = dstr;
+  const dateDisp = document.getElementById('dateDisp');
+  if (dateDisp.textContent !== dstr) {
+      dateDisp.textContent = dstr;
+  }
   
   updateMapTheme(d);
   updateTrains(false);
+  
+  requestAnimationFrame(tick);
 }
-setInterval(tick, 1000);
+requestAnimationFrame(tick);
 
 
 // Train number code mapping
@@ -124,7 +133,7 @@ function getDateGroup(d){
 function getActiveTrains(line,dtime){
   const dg=getDateGroup(dtime);
   const tm=dtime.getHours()*60+dtime.getMinutes();
-  const ts=dtime.getSeconds(); // seconds for sub-minute smooth interpolation
+  const ts=dtime.getSeconds() + dtime.getMilliseconds()/1000; // continuous float seconds for sub-minute smooth interpolation
   const tmNext=tm+1440; // next-day equivalent for late-night comparison
   const out=[];
 
@@ -697,8 +706,12 @@ function updateTrains(forced=false){
 
   // Update stats
   const total=allTrains.length;
-  document.getElementById('totalCount').textContent=total;
-  document.getElementById('lineCount').textContent=LINES.filter((_,i)=>lineVisible[i]).length;
+  const totalCountEl = document.getElementById('totalCount');
+  if (totalCountEl.textContent != total) totalCountEl.textContent = total;
+  
+  const lineCount = LINES.filter((_,i)=>lineVisible[i]).length;
+  const lineCountEl = document.getElementById('lineCount');
+  if (lineCountEl.textContent != lineCount) lineCountEl.textContent = lineCount;
 
   // Update line list
   let html='';
@@ -731,7 +744,11 @@ function updateTrains(forced=false){
       +'<span class="cdir">'+dirHtml+'</span>'
       +'</div>';
   });
-  document.getElementById('lineFilter').innerHTML=html;
+  
+  if (window._lastLineFilterHtml !== html) {
+    document.getElementById('lineFilter').innerHTML=html;
+    window._lastLineFilterHtml = html;
+  }
 }
 
 // Event Delegation for Line Filter
