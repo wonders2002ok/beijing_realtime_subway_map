@@ -375,13 +375,11 @@ function makeTrainIcon(color,bearing){
 // ═══════════════════════════════════════════════════════════
 const map=L.map('map',{center:[39.92,116.40],zoom:11,zoomControl:false,attributionControl:false});
 // Gaode (Amap) tiles - GCJ-02 coordinate system, fast in China
-// style=7: 矢量地图(标准地图), style=6: 卫星影像
+// style=7: 矢量地图(标准地图)
 const tileDay=L.tileLayer('https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=7',{
   subdomains:'1234',maxZoom:18
 });
-const tileNight=L.tileLayer('https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=6',{
-  subdomains:'1234',maxZoom:18
-});
+
 let isNightMode=null;
 function updateMapTheme(dtime){
   const h=dtime.getHours();
@@ -390,15 +388,13 @@ function updateMapTheme(dtime){
   isNightMode=night;
   const tp=document.querySelector('.leaflet-tile-pane');
   if(night){
-    if(map.hasLayer(tileDay)){map.removeLayer(tileDay);tileNight.addTo(map);}
-    tp.style.filter='brightness(0.55) saturate(0.6)';
+    tp.style.filter='invert(100%) hue-rotate(180deg) brightness(85%) contrast(110%)';
   }else{
-    if(map.hasLayer(tileNight)){map.removeLayer(tileNight);tileDay.addTo(map);}
     tp.style.filter='brightness(0.75) saturate(0.8)';
   }
 }
 // Initialize: will be called on first render via tick()
-tileNight.addTo(map);
+tileDay.addTo(map);
 L.control.zoom({position:'bottomright'}).addTo(map);
 
 // Count station appearances for transfer detection

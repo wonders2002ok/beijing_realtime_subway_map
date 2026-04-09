@@ -2,8 +2,8 @@
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans SC",sans-serif;background:#080c14;color:#e0e0e0;overflow:hidden}
 #map{position:absolute;top:0;bottom:0;left:0;right:0;z-index:1}
 .leaflet-container{background:#080c14!important}
-/* Dim the basemap so subway lines stand out (default: night mode; overridden by JS for day mode) */
-.leaflet-tile-pane{filter:brightness(0.55) saturate(0.6)}
+/* Dim the basemap so subway lines stand out (overridden by JS for night mode) */
+.leaflet-tile-pane{filter:brightness(0.75) saturate(0.8); transition: filter 0.5s ease;}
 
 /* Panel */
 #panel{
