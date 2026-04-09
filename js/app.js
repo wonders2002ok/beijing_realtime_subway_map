@@ -388,7 +388,7 @@ function updateMapTheme(dtime){
   isNightMode=night;
   const tp=document.querySelector('.leaflet-tile-pane');
   if(night){
-    tp.style.filter='invert(100%) hue-rotate(180deg) brightness(85%) contrast(110%)';
+    tp.style.filter='invert(100%) hue-rotate(180deg) grayscale(80%) brightness(80%) contrast(120%)';
   }else{
     tp.style.filter='brightness(0.75) saturate(0.8)';
   }
