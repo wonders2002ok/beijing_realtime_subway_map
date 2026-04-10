@@ -527,22 +527,54 @@ LINES.forEach((line,li)=>{
     marker.on('click',function(){
       closeActivePopup();
       const lines=info?info.lines:[li];
+      const dg = getDateGroup(new Date(simTimeMs));
+      function fmtM(m){
+        if (m==null) return '--:--';
+        let h = m/60|0, min = m%60, s="";
+        if(h>=24){ h-=24; s=" <span style='font-size:9px;color:#888'>(次日)</span>"; }
+        return String(h).padStart(2,'0')+':'+String(min).padStart(2,'0')+s;
+      }
+      
       let html='<div class="popup-card" style="position:relative">';
       html+='<span class="popup-close" onclick="closeActivePopup()">&times;</span>';
-      html+='<div class="popup-title">'+st.name+'</div>';
-      // Lines with color + name
-      html+='<div class="popup-lines">';
+      html+='<div class="popup-title" style="margin-bottom:8px">'+st.name+'</div>';
+      
+      // Timetables and Lines
       lines.forEach(lidx=>{
         const ln=LINES[lidx];
-        html+='<span class="popup-line-tag" style="background:'+ln.color+'22;color:'+ln.color+';border:1px solid '+ln.color+'44">'
+        html+='<div style="margin-bottom:6px;padding:6px;background:rgba(255,255,255,0.03);border-radius:6px;border:1px solid rgba(255,255,255,0.05)">';
+        html+='<div style="font-weight:600;color:'+ln.color+';font-size:12px;margin-bottom:4px;display:flex;align-items:center;gap:4px;">'
           +'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+ln.color+'"></span>'
-          +ln.name+'</span>';
+          +ln.name+'</div>';
+        
+        let hasDir = false;
+        if (ln.directions && ln.schedule) {
+          ln.directions.forEach(dir => {
+            const sch = ln.schedule[dir.key];
+            if (sch && sch[dg] && sch[dg][st.name]) {
+              const times = sch[dg][st.name];
+              if (times.length > 0) {
+                hasDir = true;
+                const first = fmtM(times[0]);
+                const last = fmtM(times[times.length - 1]);
+                html+='<div style="display:flex;justify-content:space-between;font-size:11px;color:#ccc;margin-top:3px;">';
+                html+='<span style="color:#aaa">首末班车 (开往 '+dir.label+')</span>';
+                html+='<span>'+first+' - '+last+'</span>';
+                html+='</div>';
+              }
+            }
+          });
+        }
+        if(!hasDir){
+          html+='<div style="font-size:11px;color:#777">暂无首末班车数据</div>';
+        }
+        html+='</div>';
       });
-      html+='</div>';
+      
       // Address: show coordinates
-      html+='<div class="popup-addr">📍 '+st.lat.toFixed(6)+'°N, '+st.lng.toFixed(6)+'°E</div>';
+      html+='<div class="popup-addr" style="margin-top:8px">📍 '+st.lat.toFixed(6)+'°N, '+st.lng.toFixed(6)+'°E</div>';
       html+='</div>';
-      activePopup=L.popup({closeButton:false,className:'popup-card',maxWidth:300,minWidth:220,offset:[0,-8]})
+      activePopup=L.popup({closeButton:false,className:'popup-card',maxWidth:320,minWidth:250,offset:[0,-8]})
         .setLatLng([st.lat,st.lng]).setContent(html).openOn(map);
     });
   });
@@ -912,6 +944,13 @@ searchResults.addEventListener('click',function(e){
   if(!item)return;
   const lat=parseFloat(item.dataset.lat),lng=parseFloat(item.dataset.lng);
   map.flyTo([lat,lng],15,{duration:0.8});
+  
+  // Trigger station popup
+  const key = item.dataset.key;
+  if(stationMarkers[key]){
+    stationMarkers[key].fire('click');
+  }
+
   searchInput.value='';
   searchResults.classList.remove('active');
   searchResults.innerHTML='';
