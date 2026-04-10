@@ -557,8 +557,13 @@ LINES.forEach((line,li)=>{
                 hasDir = true;
                 const first = fmtM(times[0]);
                 const last = fmtM(times[times.length - 1]);
+                let dest = dir.label;
+                if (!ln.loop) {
+                  dest = dir.reversed ? ln.stations[0].name : ln.stations[ln.stations.length - 1].name;
+                  dest += '方向';
+                }
                 html+='<div style="display:flex;justify-content:space-between;font-size:11px;color:#ccc;margin-top:3px;">';
-                html+='<span style="color:#aaa">首末班车 (开往 '+dir.label+')</span>';
+                html+='<span style="color:#aaa">首末班车 (开往 '+dest+')</span>';
                 html+='<span>'+first+' - '+last+'</span>';
                 html+='</div>';
               }
