@@ -3,9 +3,30 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
 #map{position:absolute;top:0;bottom:0;left:0;right:0;z-index:1}
 .leaflet-container{background:#080c14!important}
 /* Dim the basemap so subway lines stand out (overridden by JS for night mode) */
-.leaflet-tile-pane{filter:brightness(0.75) saturate(0.8); transition: filter 0.5s ease;}
+.leaflet-tile-pane{filter:brightness(0.85) saturate(0.7); transition: filter 0.5s ease;}
 
-/* Panel */
+/* ═══════════════════════════════════════════
+   LOADING OVERLAY
+   ═══════════════════════════════════════════ */
+#loadingOverlay{
+  position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;
+  background:rgba(8,12,20,0.97);display:flex;align-items:center;justify-content:center;
+  transition:opacity 0.6s ease;
+}
+#loadingOverlay.hidden{opacity:0;pointer-events:none}
+.loader-content{text-align:center}
+.loader-spinner{
+  width:40px;height:40px;margin:0 auto 16px;
+  border:3px solid rgba(99,102,241,0.15);border-top-color:#6366f1;border-radius:50%;
+  animation:spin 0.8s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loader-text{font-size:15px;color:#e0e0e0;font-weight:500}
+.loader-sub{font-size:11px;color:#555;margin-top:4px}
+
+/* ═══════════════════════════════════════════
+   PANEL
+   ═══════════════════════════════════════════ */
 #panel{
   position:absolute;top:10px;left:10px;z-index:1000;
   background:rgba(8,12,20,0.95);backdrop-filter:blur(24px);
@@ -13,14 +34,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
   padding:16px 18px;width:280px;max-height:calc(100vh - 20px);overflow-y:auto;
   box-shadow:0 8px 40px rgba(0,0,0,0.6);
   scrollbar-width:thin;scrollbar-color:#333 transparent;
+  transition:transform 0.35s cubic-bezier(0.4,0,0.2,1),opacity 0.35s ease;
 }
 #panel::-webkit-scrollbar{width:4px}
 #panel::-webkit-scrollbar-thumb{background:#444;border-radius:2px}
+.panel-header{display:flex;align-items:center;justify-content:space-between}
 #panel h1{
-  font-size:17px;font-weight:700;margin-bottom:1px;
+  font-size:17px;font-weight:700;margin-bottom:1px;flex:1;
   background:linear-gradient(135deg,#e74c3c,#f39c12,#2ecc71,#3498db,#9b59b6);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;
 }
+.panel-close-btn{
+  display:none;background:none;border:none;color:#666;font-size:22px;
+  cursor:pointer;padding:0 4px;line-height:1;transition:color .15s;
+}
+.panel-close-btn:hover{color:#fff}
 #panel .subtitle{font-size:10px;color:#555;margin-bottom:10px}
 #panel .time-display{
   font-size:32px;font-weight:200;letter-spacing:2px;
@@ -30,7 +58,57 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
 #panel .date-display{font-size:10px;color:#555;margin-bottom:10px}
 #panel .mode-label{font-size:10px;color:#6366f1;margin-bottom:8px}
 
-/* Stats */
+/* Mobile toggle */
+#panelToggle{
+  display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+  z-index:1001;background:rgba(8,12,20,0.92);backdrop-filter:blur(16px);
+  border:1px solid rgba(255,255,255,0.1);border-radius:28px;
+  padding:10px 18px;color:#e0e0e0;cursor:pointer;
+  box-shadow:0 4px 20px rgba(0,0,0,0.5);
+  display:none;align-items:center;gap:8px;font-size:13px;font-weight:600;
+  transition:all .2s ease;
+}
+#panelToggle:active{transform:translateX(-50%) scale(0.96)}
+#panelToggle #toggleTrainCount{
+  background:rgba(251,191,36,0.2);color:#fbbf24;padding:2px 8px;
+  border-radius:12px;font-size:12px;font-weight:700;
+}
+
+/* ═══════════════════════════════════════════
+   SEARCH
+   ═══════════════════════════════════════════ */
+.search-box{position:relative;margin-bottom:8px}
+.search-box input{
+  width:100%;padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);
+  background:rgba(255,255,255,0.04);color:#ddd;font-size:12px;outline:none;
+  transition:border-color .2s, background .2s;
+}
+.search-box input:focus{
+  border-color:rgba(99,102,241,0.4);background:rgba(255,255,255,0.06);
+}
+.search-box input::placeholder{color:#555}
+.search-results{
+  position:absolute;top:100%;left:0;right:0;z-index:10;
+  background:rgba(8,12,20,0.97);border:1px solid rgba(255,255,255,0.08);
+  border-radius:8px;margin-top:4px;max-height:200px;overflow-y:auto;
+  display:none;box-shadow:0 8px 24px rgba(0,0,0,0.4);
+  scrollbar-width:thin;scrollbar-color:#333 transparent;
+}
+.search-results.active{display:block}
+.search-item{
+  padding:8px 10px;cursor:pointer;font-size:12px;
+  display:flex;align-items:center;gap:6px;
+  transition:background .1s;border-bottom:1px solid rgba(255,255,255,0.03);
+}
+.search-item:last-child{border-bottom:none}
+.search-item:hover{background:rgba(255,255,255,0.06)}
+.search-item .si-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.search-item .si-name{color:#ccc;flex:1}
+.search-item .si-line{font-size:10px;color:#666}
+
+/* ═══════════════════════════════════════════
+   STATS
+   ═══════════════════════════════════════════ */
 .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px}
 .stat-box{
   background:rgba(255,255,255,0.03);border-radius:10px;padding:8px 6px;
@@ -40,10 +118,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
 .stat-box .lbl{font-size:8px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-top:1px}
 .stat-box.total .val{color:#fbbf24}
 
-/* Line list (legend) */
+/* ═══════════════════════════════════════════
+   LINE LIST (LEGEND)
+   ═══════════════════════════════════════════ */
 .line-filter{
   display:flex;flex-direction:column;gap:2px;
-  margin-bottom:8px;max-height:260px;overflow-y:auto;
+  margin-bottom:8px;
   scrollbar-width:thin;scrollbar-color:#333 transparent;
 }
 .line-filter::-webkit-scrollbar{width:3px}
@@ -61,7 +141,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
 .line-chip .cdir{font-size:9px;color:#666;white-space:nowrap;font-variant-numeric:tabular-nums}
 .line-chip .cdir b{color:#999;font-weight:600}
 
-/* Controls */
+/* ═══════════════════════════════════════════
+   CONTROLS
+   ═══════════════════════════════════════════ */
 .controls{display:flex;gap:4px;margin-bottom:8px}
 .controls button{
   flex:1;padding:5px 6px;border:1px solid rgba(255,255,255,0.08);
@@ -75,8 +157,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
 .speed-ctrl label{font-size:9px;color:#555;min-width:36px}
 .speed-ctrl input[type=range]{flex:1;accent-color:#6366f1;height:2px}
 .speed-ctrl .sv{font-size:9px;color:#6366f1;font-weight:600;min-width:24px;text-align:right}
+#spdSelect option {background:#333;color:#eee}
 
-/* Tooltip */
+/* ═══════════════════════════════════════════
+   TOOLTIPS
+   ═══════════════════════════════════════════ */
 .tt{background:rgba(8,12,20,0.92)!important;border:1px solid rgba(255,255,255,0.1)!important;border-radius:6px!important;padding:6px 8px!important;color:#ddd!important;font-size:12px!important;line-height:1.5!important}
 .tt::before{display:none!important}
 .tt-dir{font-weight:600;color:#fff;font-size:13px}
@@ -91,7 +176,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
 .st-tip .stn-lines{display:flex;flex-wrap:wrap;gap:2px;margin-top:2px}
 .st-tip .stn-dot{width:6px;height:6px;border-radius:50%;display:inline-block}
 
-/* Persistent popup for trains & stations */
+/* ═══════════════════════════════════════════
+   PERSISTENT POPUP
+   ═══════════════════════════════════════════ */
 .popup-card .leaflet-popup-content-wrapper{
   background:rgba(10,14,24,0.96)!important;border:1px solid rgba(255,255,255,0.1)!important;
   border-radius:12px!important;padding:0!important;color:#ddd!important;
@@ -123,13 +210,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
   color:#818cf8;font-size:16px;letter-spacing:1px;
 }
 
-/* Highlight mode: dim non-selected lines */
+/* ═══════════════════════════════════════════
+   HIGHLIGHT / DIM
+   ═══════════════════════════════════════════ */
 .line-dimmed{opacity:.15!important;transition:opacity .3s}
 .line-dimmed .st-dot,.line-dimmed .st-transfer-icon{opacity:.15!important}
 .line-dimmed .train-marker{opacity:.15!important}
 .line-chip.highlighted{background:rgba(255,255,255,0.08)!important;border-color:rgba(255,255,255,0.15)!important}
 
-/* Marker styles */
+/* ═══════════════════════════════════════════
+   STATION MARKERS
+   ═══════════════════════════════════════════ */
 .station-marker{background:none!important;border:none!important}
 /* Regular station: white circle with line-color border (Beijing subway standard) */
 .st-dot{
@@ -169,9 +260,47 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
   transition:transform .25s ease;
 }
 
-/* Responsive */
-@media(max-width:600px){
-  #panel{width:220px;padding:12px 14px;font-size:10px}
+/* Permanent station labels */
+.st-perm-label{
+  background:none!important;border:none!important;box-shadow:none!important;
+  font-size:10px!important;color:#ccc!important;font-weight:500!important;
+  white-space:nowrap!important;
+  text-shadow:0 0 4px #000,0 0 8px #000,0 1px 3px rgba(0,0,0,0.8)!important;
+  padding:0!important;
+}
+.st-perm-label::before{display:none!important}
+
+/* ═══════════════════════════════════════════
+   RESPONSIVE: MOBILE
+   ═══════════════════════════════════════════ */
+@media(max-width:768px){
+  #panelToggle{display:flex!important}
+  
+  #panel{
+    position:fixed;top:auto;bottom:0;left:0;right:0;
+    width:100%;max-width:100%;max-height:70vh;
+    border-radius:20px 20px 0 0;
+    padding:16px 18px 24px;
+    transform:translateY(100%);opacity:0;
+    pointer-events:none;
+    /* Safe area for notch phones */
+    padding-bottom:calc(24px + env(safe-area-inset-bottom));
+  }
+  #panel.open{
+    transform:translateY(0);opacity:1;pointer-events:auto;
+  }
+  .panel-close-btn{display:block!important}
+  
+  #panel h1{font-size:15px}
+  #panel .time-display{font-size:26px}
   .stat-box .val{font-size:18px}
-  .time-display{font-size:26px!important}
+  
+  .line-filter{max-height:28vh}
+  
+  .controls button{padding:8px 6px;font-size:11px}
+  .speed-ctrl input[type=range]{height:4px}
+}
+
+@media(min-width:769px){
+  #panelToggle{display:none!important}
 }
