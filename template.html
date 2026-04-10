@@ -2,18 +2,39 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="description" content="北京地铁全网28条线路实时运行模拟，基于时刻表推算列车位置，覆盖539个站点。">
 <title>北京地铁 · 全网实时模拟</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
+<script src="https://unpkg.com/pinyin-pro"></script>
 <link rel="stylesheet" href="css/style.css"/>
 </head>
 <body>
+
+<!-- Loading overlay -->
+<div id="loadingOverlay">
+  <div class="loader-content">
+    <div class="loader-spinner"></div>
+    <div class="loader-text">正在加载地铁数据…</div>
+    <div class="loader-sub">28 条线路 · 539 个站点</div>
+  </div>
+</div>
+
 <div id="map"></div>
 
+<!-- Mobile toggle button -->
+<button id="panelToggle" aria-label="展开面板">
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 6h14M3 10h14M3 14h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+  <span id="toggleTrainCount">0</span>
+</button>
+
 <div id="panel">
-  <h1>北京地铁 · 实时模拟</h1>
+  <div class="panel-header">
+    <h1>北京地铁 · 实时模拟</h1>
+    <button id="panelClose" class="panel-close-btn" aria-label="收起面板">&times;</button>
+  </div>
   <div class="subtitle">数据来源：Beijing-Subway-Tools · 基于时刻表推算</div>
   <div class="time-display" id="clock">--:--<span class="sec">:--</span></div>
   <div class="date-display" id="dateDisp"></div>
@@ -22,6 +43,12 @@
   <div class="stat-grid">
     <div class="stat-box"><div class="val" id="lineCount">0</div><div class="lbl">线路</div></div>
     <div class="stat-box total"><div class="val" id="totalCount">0</div><div class="lbl">在线列车</div></div>
+  </div>
+
+  <!-- Search box -->
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="🔍 搜索站点或线路…" autocomplete="off"/>
+    <div id="searchResults" class="search-results"></div>
   </div>
 
   <div class="line-filter" id="lineFilter"></div>
@@ -36,7 +63,7 @@
   </div>
   <div class="speed-ctrl">
     <label style="min-width:auto">倍速</label>
-    <select id="spdSelect" style="flex:1;background:rgba(255,255,255,0.06);color:#ccc;border:1px solid rgba(255,255,255,0.1);border-radius:4px;font-size:11px;padding:3px;outline:none;">
+    <select id="spdSelect" style="flex:1;background:rgba(255,255,255,0.06);color:#eee;border:1px solid rgba(255,255,255,0.1);border-radius:4px;font-size:11px;padding:3px;outline:none;">
       <option value="1">1x (真实时间)</option>
       <option value="10">10x (微加速)</option>
       <option value="30">30x (半分钟/秒)</option>

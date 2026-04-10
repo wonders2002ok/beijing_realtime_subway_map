@@ -1,6 +1,12 @@
 (function() {
 'use strict';
 
+// Dismiss loading overlay after first paint
+function dismissLoader() {
+  const el = document.getElementById('loadingOverlay');
+  if(el) { el.classList.add('hidden'); setTimeout(()=>el.remove(), 700); }
+}
+
 // Pre-compute station index per line
 LINES.forEach(line=>{
   line.stIdx={};
@@ -95,6 +101,9 @@ function tick() {
   
   updateMapTheme(d);
   updateTrains(false);
+  
+  // Dismiss loader on first tick
+  if(!window._loaderDismissed){ window._loaderDismissed=true; dismissLoader(); }
   
   requestAnimationFrame(tick);
 }
@@ -390,7 +399,7 @@ function updateMapTheme(dtime){
   if(night){
     tp.style.filter='invert(100%) hue-rotate(180deg) grayscale(80%) brightness(80%) contrast(120%)';
   }else{
-    tp.style.filter='brightness(0.75) saturate(0.8)';
+    tp.style.filter='brightness(0.85) saturate(0.7)';
   }
 }
 // Initialize: will be called on first render via tick()
@@ -518,22 +527,54 @@ LINES.forEach((line,li)=>{
     marker.on('click',function(){
       closeActivePopup();
       const lines=info?info.lines:[li];
+      const dg = getDateGroup(new Date(simTimeMs));
+      function fmtM(m){
+        if (m==null) return '--:--';
+        let h = m/60|0, min = m%60, s="";
+        if(h>=24){ h-=24; s=" <span style='font-size:9px;color:#888'>(次日)</span>"; }
+        return String(h).padStart(2,'0')+':'+String(min).padStart(2,'0')+s;
+      }
+      
       let html='<div class="popup-card" style="position:relative">';
       html+='<span class="popup-close" onclick="closeActivePopup()">&times;</span>';
-      html+='<div class="popup-title">'+st.name+'</div>';
-      // Lines with color + name
-      html+='<div class="popup-lines">';
+      html+='<div class="popup-title" style="margin-bottom:8px">'+st.name+'</div>';
+      
+      // Timetables and Lines
       lines.forEach(lidx=>{
         const ln=LINES[lidx];
-        html+='<span class="popup-line-tag" style="background:'+ln.color+'22;color:'+ln.color+';border:1px solid '+ln.color+'44">'
+        html+='<div style="margin-bottom:6px;padding:6px;background:rgba(255,255,255,0.03);border-radius:6px;border:1px solid rgba(255,255,255,0.05)">';
+        html+='<div style="font-weight:600;color:'+ln.color+';font-size:12px;margin-bottom:4px;display:flex;align-items:center;gap:4px;">'
           +'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+ln.color+'"></span>'
-          +ln.name+'</span>';
+          +ln.name+'</div>';
+        
+        let hasDir = false;
+        if (ln.directions && ln.schedule) {
+          ln.directions.forEach(dir => {
+            const sch = ln.schedule[dir.key];
+            if (sch && sch[dg] && sch[dg][st.name]) {
+              const times = sch[dg][st.name];
+              if (times.length > 0) {
+                hasDir = true;
+                const first = fmtM(times[0]);
+                const last = fmtM(times[times.length - 1]);
+                html+='<div style="display:flex;justify-content:space-between;font-size:11px;color:#ccc;margin-top:3px;">';
+                html+='<span style="color:#aaa">首末班车 (开往 '+dir.label+')</span>';
+                html+='<span>'+first+' - '+last+'</span>';
+                html+='</div>';
+              }
+            }
+          });
+        }
+        if(!hasDir){
+          html+='<div style="font-size:11px;color:#777">暂无首末班车数据</div>';
+        }
+        html+='</div>';
       });
-      html+='</div>';
+      
       // Address: show coordinates
-      html+='<div class="popup-addr">📍 '+st.lat.toFixed(6)+'°N, '+st.lng.toFixed(6)+'°E</div>';
+      html+='<div class="popup-addr" style="margin-top:8px">📍 '+st.lat.toFixed(6)+'°N, '+st.lng.toFixed(6)+'°E</div>';
       html+='</div>';
-      activePopup=L.popup({closeButton:false,className:'popup-card',maxWidth:300,minWidth:220,offset:[0,-8]})
+      activePopup=L.popup({closeButton:false,className:'popup-card',maxWidth:320,minWidth:250,offset:[0,-8]})
         .setLatLng([st.lat,st.lng]).setContent(html).openOn(map);
     });
   });
@@ -548,9 +589,38 @@ LINES.forEach((line,li)=>{
   updateStationScale();
 });
 
+// ═══════════════════════════════════════════════════════════
+// PERMANENT STATION LABELS AT HIGH ZOOM
+// ═══════════════════════════════════════════════════════════
+const permLabels=[];
+function updatePermLabels(){
+  const z=map.getZoom();
+  const showLabels=z>=14;
+  if(showLabels && permLabels.length===0){
+    // Create permanent labels for all stations
+    Object.keys(stationMarkers).forEach(k=>{
+      const info=stationLines[k];
+      if(!info)return;
+      const lbl=L.tooltip({
+        permanent:true,direction:'right',offset:[8,0],
+        className:'st-perm-label',interactive:false
+      }).setContent(info.name).setLatLng([info.lat,info.lng]);
+      lbl.addTo(map);
+      permLabels.push(lbl);
+    });
+  } else if(!showLabels && permLabels.length>0){
+    permLabels.forEach(l=>map.removeLayer(l));
+    permLabels.length=0;
+  }
+}
+map.on('zoomend',updatePermLabels);
+updatePermLabels();
+
 function closeActivePopup(){
   if(activePopup){map.closePopup(activePopup);activePopup=null;}
 }
+// Expose to global for inline onclick handlers (legacy) — but prefer event delegation
+window.closeActivePopup = closeActivePopup;
 
 function highlightLine(li){
   // Toggle: if already highlighted, un-highlight
@@ -640,15 +710,16 @@ function updateTrains(forced=false){
       const m=trainMarkers[t.id];
       m._t=t;
       m.setLatLng([pos.lat,pos.lng]);
-      m.setIcon(makeTrainIcon(line.color,bearing));
+      if(m._lastBearing !== bearing){
+        m._lastBearing = bearing;
+        const el = m.getElement();
+        if(el && el.querySelector('svg')){
+          el.querySelector('svg').style.transform = `rotate(${bearing}deg)`;
+        } else {
+          m.setIcon(makeTrainIcon(line.color,bearing));
+        }
+      }
       m.setOpacity(isDimmed?0.15:1);
-      m.setTooltipContent(
-        '<div class="tt-no">车辆编号：'+t.id+'</div>'+
-        '<div class="tt-dir">'+t.dir+'</div>'+
-        '<div class="tt-st">'+t.from+' ➜ '+t.to+'</div>'+
-        '<div class="tt-tm">到站 '+t.arr+'</div>'+
-        '<div class="tt-line" style="background:'+line.color+'22;color:'+line.color+'">'+t.lineName+'</div>'
-      );
       if(activePopup && activePopup._trainId === t.id){
         activePopup.setLatLng([pos.lat,pos.lng]);
         const html='<div class="popup-card" style="position:relative">'
@@ -661,19 +732,15 @@ function updateTrains(forced=false){
           +'<div class="popup-row"><b>到站：</b>'+t.arr+'</div>'
           +'<div class="popup-line-tag" style="background:'+line.color+'22;color:'+line.color+';border:1px solid '+line.color+'44;margin-top:6px">'+line.name+'</div>'
           +'</div>';
-        activePopup.setContent(html);
+        if (m._lastHtml !== html) {
+          activePopup.setContent(html);
+          m._lastHtml = html;
+        }
       }
     }else{
       const m=L.marker([pos.lat,pos.lng],{icon:makeTrainIcon(line.color,bearing)}).addTo(map);
       m._t=t;
-      m.bindTooltip(
-        '<div class="tt-no">车辆编号：'+t.id+'</div>'+
-        '<div class="tt-dir">'+t.dir+'</div>'+
-        '<div class="tt-st">'+t.from+' ➜ '+t.to+'</div>'+
-        '<div class="tt-tm">到站 '+t.arr+'</div>'+
-        '<div class="tt-line" style="background:'+line.color+'22;color:'+line.color+'">'+t.lineName+'</div>',
-        {className:'tt',direction:'top',offset:[0,-10]}
-      );
+      m._lastBearing = bearing;
       // Click → persistent popup
       m.on('click',function(e){
         L.DomEvent.stopPropagation(e);
@@ -704,6 +771,10 @@ function updateTrains(forced=false){
   const total=allTrains.length;
   const totalCountEl = document.getElementById('totalCount');
   if (totalCountEl.textContent != total) totalCountEl.textContent = total;
+  
+  // Update mobile toggle count
+  const toggleCount = document.getElementById('toggleTrainCount');
+  if (toggleCount && toggleCount.textContent != total) toggleCount.textContent = total;
   
   const lineCount = LINES.filter((_,i)=>lineVisible[i]).length;
   const lineCountEl = document.getElementById('lineCount');
@@ -782,9 +853,130 @@ function toggleLine(li){
   }
 }
 
-// Fit bounds
-let allCoords=[];
-LINES.forEach(line=>line.stations.forEach(s=>{if(s.lng!==null)allCoords.push([s.lat,s.lng]);}));
-if(allCoords.length)map.fitBounds(L.latLngBounds(allCoords).pad(0.05));
+// Fit bounds (or restore from URL)
+function applyUrlState(){
+  const params=new URLSearchParams(window.location.search);
+  const lat=parseFloat(params.get('lat')),lng=parseFloat(params.get('lng')),z=parseInt(params.get('z'));
+  const t=parseInt(params.get('t'));
+  if(!isNaN(lat)&&!isNaN(lng)&&!isNaN(z)){
+    map.setView([lat,lng],z);
+  }else{
+    let allCoords=[];
+    LINES.forEach(line=>line.stations.forEach(s=>{if(s.lng!==null)allCoords.push([s.lat,s.lng]);}));
+    if(allCoords.length)map.fitBounds(L.latLngBounds(allCoords).pad(0.05));
+  }
+  if(!isNaN(t)&&t>=0&&t<=86400){
+    scrubTime(t);
+  }
+}
+applyUrlState();
+
+// Update URL on map move (debounced)
+let urlTimer=null;
+function syncUrlState(){
+  clearTimeout(urlTimer);
+  urlTimer=setTimeout(()=>{
+    const c=map.getCenter(),z=map.getZoom();
+    const d=new Date(simTimeMs);
+    const secOfDay=d.getHours()*3600+d.getMinutes()*60+d.getSeconds();
+    const url=new URL(window.location);
+    url.searchParams.set('lat',c.lat.toFixed(4));
+    url.searchParams.set('lng',c.lng.toFixed(4));
+    url.searchParams.set('z',z);
+    if(simMode==='sim') url.searchParams.set('t',secOfDay);
+    else url.searchParams.delete('t');
+    history.replaceState(null,'',url);
+  },500);
+}
+map.on('moveend',syncUrlState);
+map.on('zoomend',syncUrlState);
+
+// ═══════════════════════════════════════════════════════════
+// SEARCH
+// ═══════════════════════════════════════════════════════════
+const searchInput=document.getElementById('searchInput');
+const searchResults=document.getElementById('searchResults');
+
+// Build search index with pinyin support
+const searchIndex=[];
+function toPinyin(str, firstLetter=false){
+  if(typeof pinyinPro==='undefined')return '';
+  try{
+    return pinyinPro.pinyin(str, { toneType: 'none', pattern: firstLetter ? 'first' : 'pinyin' }).replace(/\s+/g, '').toLowerCase();
+  }catch(e){return '';}
+}
+Object.keys(stationLines).forEach(k=>{
+  const info=stationLines[k];
+  if(!info)return;
+  searchIndex.push({
+    name:info.name,lat:info.lat,lng:info.lng,
+    lines:info.lines.map(li=>LINES[li]),
+    key:k,
+    pinyin:toPinyin(info.name),
+    pyAbbr:toPinyin(info.name, true)
+  });
+});
+
+searchInput.addEventListener('input',function(){
+  const q=this.value.trim().toLowerCase();
+  if(!q){searchResults.classList.remove('active');searchResults.innerHTML='';return;}
+  const matches=searchIndex.filter(s=>{
+    return s.name.toLowerCase().includes(q)
+      || s.pinyin.includes(q)
+      || s.pyAbbr.includes(q);
+  }).slice(0,10);
+  if(!matches.length){searchResults.classList.remove('active');searchResults.innerHTML='';return;}
+  let html='';
+  matches.forEach(m=>{
+    const lineNames=m.lines.map(l=>'<span class="si-line" style="color:'+l.color+'">'+l.name+'</span>').join(' ');
+    html+='<div class="search-item" data-lat="'+m.lat+'" data-lng="'+m.lng+'" data-key="'+m.key+'">'
+      +'<span class="si-dot" style="background:'+m.lines[0].color+'"></span>'
+      +'<span class="si-name">'+m.name+'</span>'
+      +lineNames
+      +'</div>';
+  });
+  searchResults.innerHTML=html;
+  searchResults.classList.add('active');
+});
+
+searchResults.addEventListener('click',function(e){
+  const item=e.target.closest('.search-item');
+  if(!item)return;
+  const lat=parseFloat(item.dataset.lat),lng=parseFloat(item.dataset.lng);
+  map.flyTo([lat,lng],15,{duration:0.8});
+  
+  // Trigger station popup
+  const key = item.dataset.key;
+  if(stationMarkers[key]){
+    stationMarkers[key].fire('click');
+  }
+
+  searchInput.value='';
+  searchResults.classList.remove('active');
+  searchResults.innerHTML='';
+  // Close mobile panel
+  document.getElementById('panel').classList.remove('open');
+});
+
+// Close search on click outside
+document.addEventListener('click',function(e){
+  if(!e.target.closest('.search-box')){
+    searchResults.classList.remove('active');
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// MOBILE DRAWER
+// ═══════════════════════════════════════════════════════════
+document.getElementById('panelToggle').addEventListener('click',function(){
+  document.getElementById('panel').classList.add('open');
+});
+document.getElementById('panelClose').addEventListener('click',function(){
+  document.getElementById('panel').classList.remove('open');
+});
+// Close drawer on map tap (mobile)
+map.on('click',function(){
+  document.getElementById('panel').classList.remove('open');
+});
 
 })();
