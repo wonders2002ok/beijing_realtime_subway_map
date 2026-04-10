@@ -146,7 +146,11 @@ function getActiveTrains(line,dtime){
   const tmNext=tm+1440; // next-day equivalent for late-night comparison
   const out=[];
 
-  function fmtM(m){return String(m/60|0).padStart(2,'0')+':'+String(m%60).padStart(2,'0');}
+  function fmtM(m){
+    let h = (m/60|0), min = m%60, s="";
+    if(h>=24){ h%=24; s=" <span style='font-size:9px;color:#888'>(次日)</span>"; }
+    return String(h).padStart(2,'0')+':'+String(min).padStart(2,'0')+s;
+  }
 
   for(const dir of line.directions){
     const dk=dir.key;
