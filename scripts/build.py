@@ -3,7 +3,7 @@ Beijing Subway Real-Time Simulation Builder v2
 Uses Beijing-Subway-Tools JSON5 data (24 lines) + Amap coordinates.
 Outputs a single-file HTML with all data embedded.
 """
-import json, os, sys
+import json, os, sys, re
 
 try:
     import pyjson5
@@ -17,6 +17,25 @@ AMAP_PATH = os.path.join(PROJECT_ROOT, 'data', 'amap_beijing.json')
 TOOLS_DATA = os.path.join(PROJECT_ROOT, '..', 'Beijing-Subway-Tools', 'data', 'beijing')
 TEMPLATE_PATH = os.path.join(PROJECT_ROOT, 'template.html')
 OUTPUT_PATH = os.path.join(PROJECT_ROOT, 'index.html')
+
+# ── Line code generation ──
+# Special alphabetic codes for non-numeric lines (matching previous LINE_CODES mapping)
+SPECIAL_CODES = {
+    'fangshan-line': 'FS', 'yizhuang-line': 'YZ', 'yanfang-line': 'YF',
+    'changping-line': 'CP', 'line-s1': 'S1', 'xijiao-line': 'XJ',
+    'yizhuang-t1-line': 'YT', 'capital-airport-express': 'PEK',
+    'daxing-airport-express': 'PKX',
+}
+
+def get_line_code(filename):
+    """Generate a short code for a line from its source filename."""
+    base = os.path.splitext(os.path.basename(filename))[0]  # strip .json5
+    if base in SPECIAL_CODES:
+        return SPECIAL_CODES[base]
+    m = re.match(r'line(\d+)', base)
+    if m:
+        return m.group(1).zfill(2)
+    return '??'
 
 # ── Load Amap coordinates ──
 print("Loading Amap coordinates...")
@@ -52,7 +71,21 @@ MANUAL_COORDS = {
 }
 amap_stations.update(MANUAL_COORDS)
 
-print("  Amap: %d unique stations (+ %d manual)" % (len(amap_stations) - len(MANUAL_COORDS), len(MANUAL_COORDS)))
+# Load API-fetched coordinates to override manual estimates
+FETCHED_PATH = os.path.join(PROJECT_ROOT, 'data', 'amap_fetched_coords.json')
+fetched_count = 0
+if os.path.exists(FETCHED_PATH):
+    with open(FETCHED_PATH, 'r', encoding='utf-8') as f:
+        fetched_data = json.load(f)
+    fetched_coords = fetched_data.get('fetched', {})
+    amap_stations.update(fetched_coords)
+    fetched_count = len(fetched_coords)
+    print("  Fetched coords: %d stations (from %s)" % (fetched_count, FETCHED_PATH))
+else:
+    print("  Tip: run scripts/fetch_coords.py <AMAP_KEY> to get precise T1 coords")
+
+manual_count = sum(1 for k in MANUAL_COORDS if k not in (fetched_coords if os.path.exists(FETCHED_PATH) else {}))
+print("  Amap: %d unique stations (+ %d manual)" % (len(amap_stations) - fetched_count - manual_count, manual_count))
 
 # ── Delta expansion ──
 def expand_delta(first_train, delta_arr):
@@ -388,6 +421,7 @@ for fn in LINE_FILE_NAMES:
     
     line_info = {
         'name': name,
+        'code': get_line_code(fn),
         'color': color,
         'loop': is_loop,
         'directions': directions,
